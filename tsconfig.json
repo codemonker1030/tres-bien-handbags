@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compileOnSave": false,
+  "files": [],
+  "references": [
+    {
+      "path": "./shared/db"
+    },
+    {
+      "path": "./shared/api-client"
+    },
+    {
+      "path": "./shared/schemas"
+    }
+  ]
+}
