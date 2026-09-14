@@ -197,13 +197,57 @@ function ImageStep({
     try {
       const formData = new FormData();
       formData.append("image", file);
-      const res = await fetch("/api/uploads", { method: "POST", body: formData });
-      if (!res.ok) throw new Error("Upload failed");
+
+      const apiBaseUrl = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
+
+      const res = await fetch(`${apiBaseUrl}/api/uploads`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const message = await res.text().catch(() => "");
+        throw new Error(
+          message || `Upload failed with status ${res.status}`,
+        );
+      }
+
       const { url } = await res.json();
-      setImages((prev) => prev.map((e) => (e.id === entryId ? { ...e, uploadedUrl: url, uploading: false } : e)));
-    } catch {
-      setImages((prev) => prev.map((e) => (e.id === entryId ? { ...e, uploading: false, error: true } : e)));
-      toast({ title: "One image failed to upload", variant: "destructive" });
+
+      setImages((prev) =>
+        prev.map((e) =>
+          e.id === entryId
+            ? {
+                ...e,
+                uploadedUrl: url,
+                uploading: false,
+              }
+            : e,
+        ),
+      );
+    } catch (error) {
+      console.error("Product image upload failed:", error);
+
+      setImages((prev) =>
+        prev.map((e) =>
+          e.id === entryId
+            ? {
+                ...e,
+                uploading: false,
+                error: true,
+              }
+            : e,
+        ),
+      );
+
+      toast({
+        title: "One image failed to upload",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Unable to upload image",
+        variant: "destructive",
+      });
     }
   };
 
