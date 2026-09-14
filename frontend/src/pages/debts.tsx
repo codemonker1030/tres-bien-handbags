@@ -12,9 +12,13 @@ import {
   type Debt, type DebtKind,
 } from "@/components/dialogs/debt-dialog";
 
+const API_BASE_URL = (
+  import.meta.env.VITE_API_URL ?? ""
+).replace(/\/+$/, "");
+
 // ─── API fetch helpers ────────────────────────────────────────────────────────
 async function fetchCustomerDebts(): Promise<Debt[]> {
-  const r = await fetch("/api/debts/customers");
+  const r = await fetch(`${API_BASE_URL}/api/debts/customers`);
   if (!r.ok) throw new Error("Failed to load customer debts");
   const rows = await r.json();
   // API returns customerName — normalise to `name`
@@ -25,7 +29,7 @@ async function fetchCustomerDebts(): Promise<Debt[]> {
 }
 
 async function fetchSupplierDebts(): Promise<Debt[]> {
-  const r = await fetch("/api/debts/suppliers");
+  const r = await fetch(`${API_BASE_URL}/api/debts/suppliers`);
   if (!r.ok) throw new Error("Failed to load supplier debts");
   const rows = await r.json();
   return rows.map((d: Record<string, unknown>) => ({
@@ -35,7 +39,7 @@ async function fetchSupplierDebts(): Promise<Debt[]> {
 }
 
 async function apiDelete(path: string): Promise<void> {
-  const r = await fetch(path, { method: "DELETE" });
+  const r = await fetch(`${API_BASE_URL}${path}`, { method: "DELETE" });
   if (!r.ok && r.status !== 204) throw new Error("Delete failed");
 }
 
