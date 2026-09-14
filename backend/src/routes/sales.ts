@@ -12,6 +12,9 @@ import {
   ListProductSalesParams,
   ListProductSalesResponse,
   ListProductSalesResponseItem,
+  UpdateSaleParams,
+  UpdateSaleBody,
+  UpdateSaleResponse,
   DeleteSaleParams,
 } from "@workspace/schemas";
 
@@ -271,6 +274,133 @@ router.post(
     res.status(201).json(
       ListProductSalesResponseItem.parse(
         mapSale(sale),
+      ),
+    );
+  },
+);
+
+
+router.patch(
+  "/sales/:id",
+  async (req, res): Promise<void> => {
+    const params = UpdateSaleParams.safeParse(req.params);
+
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const parsed = UpdateSaleBody.safeParse(req.body);
+
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+
+    const [existingSale] = await db
+      .select()
+      .from(salesTable)
+      .where(eq(salesTable.id, params.data.id));
+
+    if (!existingSale) {
+      res.status(404).json({ error: "Sale not found" });
+      return;
+    }
+
+    const [product] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, existingSale.productId));
+
+    if (!product) {
+      res.status(404).json({ error: "Product not found" });
+      return;
+    }
+
+    const remainingDebt = parsed.data.debtAmount ?? 0;
+    const hasDebt = remainingDebt > 0;
+    const customerName = parsed.data.customerName?.trim();
+
+    if (hasDebt && !customerName) {
+      res.status(400).json({
+        error:
+          "customerName is required for partial or credit sales",
+      });
+      return;
+    }
+
+    let debtId: number | null = existingSale.debtId;
+
+    if (hasDebt && customerName) {
+      if (debtId != null) {
+        const [existingDebt] = await db
+          .select()
+          .from(customerDebtsTable)
+          .where(eq(customerDebtsTable.id, debtId));
+
+        if (existingDebt) {
+          const alreadyPaid = Number(existingDebt.amountPaid ?? 0);
+
+          await db
+            .update(customerDebtsTable)
+            .set({
+              customerName,
+              description: `Credit sale — ${product.name}`,
+              // UpdateSaleBody.debtAmount represents the amount still owed.
+              // Preserve payments already recorded on the Debts page by
+              // rebuilding the debt total as paid-so-far + remaining.
+              amount: (alreadyPaid + remainingDebt).toFixed(2),
+              notes: parsed.data.notes ?? null,
+            })
+            .where(eq(customerDebtsTable.id, debtId));
+        } else {
+          debtId = await createDebtForSale({
+            productName: product.name,
+            customerName,
+            debtAmount: remainingDebt,
+            notes: parsed.data.notes,
+          });
+        }
+      } else {
+        debtId = await createDebtForSale({
+          productName: product.name,
+          customerName,
+          debtAmount: remainingDebt,
+          notes: parsed.data.notes,
+        });
+      }
+    } else if (debtId != null) {
+      await db
+        .delete(customerDebtsTable)
+        .where(eq(customerDebtsTable.id, debtId));
+
+      debtId = null;
+    }
+
+    const [updatedSale] = await db
+      .update(salesTable)
+      .set({
+        exactSellingPrice:
+          parsed.data.exactSellingPrice.toFixed(2),
+        paymentMethod: parsed.data.paymentMethod,
+        debtAmount: hasDebt
+          ? remainingDebt.toFixed(2)
+          : null,
+        customerName: hasDebt
+          ? customerName!
+          : null,
+        notes: parsed.data.notes ?? null,
+        debtId,
+      })
+      .where(eq(salesTable.id, params.data.id))
+      .returning();
+
+    res.json(
+      UpdateSaleResponse.parse(
+        mapSale(
+          updatedSale,
+          hasDebt ? remainingDebt : null,
+        ),
       ),
     );
   },

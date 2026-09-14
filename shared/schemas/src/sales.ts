@@ -7,28 +7,43 @@ const saleShape = {
   paymentMethod: zod.enum(["cash", "mpesa"]),
   debtAmount: zod.number().nullish(),
   customerName: zod.string().nullish(),
+
   // Links to the customer_debts row created for this sale (if it was
   // partial/credit); debtRemaining is the LIVE unpaid balance, kept in sync
   // automatically when a payment is recorded on the Debts page.
   debtId: zod.number().nullish(),
   debtRemaining: zod.number().nullish(),
+
   notes: zod.string().nullish(),
   soldAt: zod.string(),
   createdAt: zod.string(),
 };
 
-export const ListProductSalesParams = zod.object({ id: zod.coerce.number() });
-export const ListProductSalesResponseItem = zod.object(saleShape);
-export const ListProductSalesResponse = zod.array(ListProductSalesResponseItem);
+export const ListProductSalesParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListProductSalesResponseItem =
+  zod.object(saleShape);
+
+export const ListProductSalesResponse = zod.array(
+  ListProductSalesResponseItem,
+);
 
 export const ListAllSalesResponseItem = zod.object({
   ...saleShape,
   productName: zod.string(),
   productImageUrl: zod.string().nullish(),
 });
-export const ListAllSalesResponse = zod.array(ListAllSalesResponseItem);
 
-export const CreateSaleParams = zod.object({ id: zod.coerce.number() });
+export const ListAllSalesResponse = zod.array(
+  ListAllSalesResponseItem,
+);
+
+export const CreateSaleParams = zod.object({
+  id: zod.coerce.number(),
+});
+
 export const CreateSaleBody = zod.object({
   exactSellingPrice: zod.number().min(0),
   paymentMethod: zod.enum(["cash", "mpesa"]),
@@ -37,4 +52,27 @@ export const CreateSaleBody = zod.object({
   notes: zod.string().optional(),
 });
 
-export const DeleteSaleParams = zod.object({ id: zod.coerce.number() });
+/**
+ * Updating a sale uses the current amount still owed.
+ *
+ * This matters because a customer may already have made payments from
+ * the Debts page after the original sale was recorded.
+ */
+export const UpdateSaleParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateSaleBody = zod.object({
+  exactSellingPrice: zod.number().min(0),
+  paymentMethod: zod.enum(["cash", "mpesa"]),
+  debtAmount: zod.number().min(0).optional(),
+  customerName: zod.string().optional(),
+  notes: zod.string().optional(),
+});
+
+export const UpdateSaleResponse =
+  ListProductSalesResponseItem;
+
+export const DeleteSaleParams = zod.object({
+  id: zod.coerce.number(),
+});
