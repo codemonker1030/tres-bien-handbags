@@ -98,18 +98,18 @@ function StatCard({
       onClick={onClick}
       type={onClick ? "button" : undefined}
       className={cn(
-        "rounded-2xl bg-card border p-4 flex flex-col gap-1 shadow-sm text-left w-full",
+        "rounded-xl md:rounded-2xl bg-card border p-2.5 md:p-4 flex flex-col gap-0.5 md:gap-1 shadow-sm text-left w-full",
         onClick && "transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer",
         active ? "border-primary ring-1 ring-primary" : "border-border",
       )}
     >
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        <span className={cn("w-7 h-7 rounded-full flex items-center justify-center shrink-0", toneClasses)}>
-          <Icon className="w-3.5 h-3.5" />
+        <span className="text-[10px] md:text-xs font-medium text-muted-foreground">{label}</span>
+        <span className={cn("w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center shrink-0", toneClasses)}>
+          <Icon className="w-3 h-3 md:w-3.5 md:h-3.5" />
         </span>
       </div>
-      <p className="text-xl font-bold leading-tight text-foreground">{value}</p>
+      <p className="text-sm md:text-xl font-bold leading-tight text-foreground truncate">{value}</p>
     </Wrapper>
   );
 }
@@ -154,10 +154,10 @@ function ProductCard({
   const status = getStockStatus(product);
 
   return (
-    <div className="group rounded-2xl bg-card border border-border overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 flex flex-col">
+    <div className="group rounded-xl md:rounded-2xl bg-card border border-border overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 flex flex-col">
       {/* Photo area — tap to view detail */}
       <div
-        className="relative aspect-[4/5] bg-muted overflow-hidden cursor-pointer"
+        className="relative aspect-[1/1] md:aspect-[4/5] bg-muted overflow-hidden cursor-pointer"
         onClick={() => onNavigate(product.id)}
       >
         {product.imageUrl ? (
@@ -179,18 +179,18 @@ function ProductCard({
             product.imageUrl ? "hidden" : "",
           )}
         >
-          <Package className="w-12 h-12" />
-          <span className="text-xs mt-2 font-medium uppercase tracking-widest">No photo</span>
+          <Package className="w-8 h-8 md:w-12 md:h-12" />
+          <span className="text-[10px] md:text-xs mt-1.5 md:mt-2 font-medium uppercase tracking-widest">No photo</span>
         </div>
 
         {/* Stock status */}
-        <div className="absolute top-2.5 left-2.5">
+        <div className="absolute top-1.5 left-1.5 md:top-2.5 md:left-2.5">
           <StockBadge status={status} stock={product.stock} />
         </div>
 
         {/* Category badge */}
-        <div className="absolute top-2.5 right-2.5">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-black/55 text-white shadow-sm backdrop-blur-sm">
+        <div className="absolute top-1.5 right-1.5 md:top-2.5 md:right-2.5">
+          <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-black/55 text-white shadow-sm backdrop-blur-sm">
             {getCategoryEmoji(product.category)} {product.category}
           </span>
         </div>
@@ -226,11 +226,11 @@ function ProductCard({
       </div>
 
       {/* Info */}
-      <div className="p-3.5 flex flex-col gap-1.5 flex-1">
-        <h3 className="font-semibold text-sm text-foreground leading-snug line-clamp-2">{product.name}</h3>
+      <div className="p-2.5 md:p-3.5 flex flex-col gap-1 md:gap-1.5 flex-1">
+        <h3 className="font-semibold text-xs md:text-sm text-foreground leading-snug line-clamp-2">{product.name}</h3>
 
         {/* Selling price */}
-        <p className="text-base font-bold text-primary leading-none mt-auto pt-1.5">
+        <p className="text-sm md:text-base font-bold text-primary leading-none mt-auto pt-1 md:pt-1.5">
           {formatCurrency(product.price)}
         </p>
 
@@ -238,20 +238,20 @@ function ProductCard({
             it works on mobile too, matching how often it's actually used. */}
         <Button
           size="sm"
-          className="w-full h-8 text-xs mt-1"
+          className="w-full h-7 md:h-8 text-[11px] md:text-xs mt-1"
           disabled={status === "out-of-stock"}
           onClick={(e) => { e.stopPropagation(); onSell(product.id); }}
         >
-          <ShoppingBag className="w-3.5 h-3.5 mr-1.5" />
+          <ShoppingBag className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1" />
           {status === "out-of-stock" ? "Out of stock" : "Sell"}
         </Button>
 
         {/* Mobile: Edit — View is just tapping the card, Sell is the button above */}
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(product); }}
-          className="flex items-center justify-center gap-1.5 h-7 text-xs font-medium text-muted-foreground hover:text-foreground mt-0.5 md:hidden"
+          className="flex items-center justify-center gap-1 h-6 text-[10px] font-medium text-muted-foreground hover:text-foreground md:hidden"
         >
-          <Edit className="w-3.5 h-3.5" /> Edit
+          <Edit className="w-3 h-3" /> Edit
         </button>
       </div>
     </div>
@@ -288,23 +288,23 @@ function CategorySection({
   const hasMore = products.length > SECTION_PREVIEW_COUNT;
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-2.5 md:space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-base font-bold text-foreground">
-          <span className="text-lg leading-none">{getCategoryEmoji(category)}</span>
+        <h3 className="flex items-center gap-1.5 md:gap-2 text-sm md:text-base font-bold text-foreground">
+          <span className="text-base md:text-lg leading-none">{getCategoryEmoji(category)}</span>
           {category}
-          <span className="text-sm font-normal text-muted-foreground">({products.length})</span>
+          <span className="text-xs md:text-sm font-normal text-muted-foreground">({products.length})</span>
         </h3>
         {hasMore && (
           <button
             onClick={() => onViewAll(category)}
-            className="flex items-center gap-0.5 text-sm font-medium text-primary hover:underline underline-offset-2"
+            className="flex items-center gap-0.5 text-xs md:text-sm font-medium text-primary hover:underline underline-offset-2"
           >
             View all <ChevronRight className="w-3.5 h-3.5" />
           </button>
         )}
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 md:gap-4">
         {preview.map((product) => (
           <ProductCard key={product.id} product={product} {...cardHandlers} />
         ))}
@@ -488,26 +488,34 @@ export function Inventory() {
     : activeFilter;
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-500">
+    <div className="space-y-3 md:space-y-5 animate-in fade-in duration-500">
 
       {/* Header */}
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">Inventory</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">Your boutique's collection, organized.</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Inventory</h2>
+          <p className="hidden md:block text-sm text-muted-foreground mt-0.5">
+            Your boutique's collection, organized.
+          </p>
         </div>
-        <Button onClick={() => setAddDialogOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Product
+
+        <Button
+          onClick={() => setAddDialogOpen(true)}
+          size="sm"
+          className="h-8 px-2.5 md:h-9 md:px-4 shrink-0"
+        >
+          <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 md:mr-2" />
+          <span className="hidden md:inline">Add Product</span>
+          <span className="md:hidden ml-1">Add</span>
         </Button>
       </div>
 
       {/* Main tab: In Stock / Sold */}
-      <div className="flex gap-1 bg-muted/50 rounded-xl p-1 w-fit">
+      <div className="flex gap-1 bg-muted/50 rounded-lg md:rounded-xl p-1 w-full sm:w-fit">
         <button
           onClick={() => setMainTab("stock")}
           className={cn(
-            "px-4 py-1.5 rounded-lg text-sm font-semibold transition-all",
+            "flex-1 sm:flex-none px-3 md:px-4 py-1.5 rounded-md md:rounded-lg text-xs md:text-sm font-semibold transition-all",
             mainTab === "stock"
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground",
@@ -519,7 +527,7 @@ export function Inventory() {
         <button
           onClick={() => setMainTab("sold")}
           className={cn(
-            "px-4 py-1.5 rounded-lg text-sm font-semibold transition-all",
+            "flex-1 sm:flex-none px-3 md:px-4 py-1.5 rounded-md md:rounded-lg text-xs md:text-sm font-semibold transition-all",
             mainTab === "sold"
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground",
@@ -536,10 +544,14 @@ export function Inventory() {
           {/* Overview stats — the Low Stock / Out of Stock / Recently Added
               cards double as filters; tap one to filter, tap again to clear. */}
           {!isLoading && (products?.length ?? 0) > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 md:gap-3">
               <StatCard icon={Package} label="Total Products" value={String(stats.totalProducts)} />
-              <StatCard icon={Layers} label="Categories" value={String(stats.categoriesCount)} />
-              <StatCard icon={Wallet} label="Inventory Value" value={formatCurrency(stats.inventoryValue)} />
+              <div className="hidden md:block">
+                <StatCard icon={Layers} label="Categories" value={String(stats.categoriesCount)} />
+              </div>
+              <div className="hidden md:block">
+                <StatCard icon={Wallet} label="Inventory Value" value={formatCurrency(stats.inventoryValue)} />
+              </div>
               <StatCard
                 icon={AlertTriangle}
                 label="Low Stock"
@@ -556,6 +568,7 @@ export function Inventory() {
                 onClick={() => toggleFilter(FILTER_OUT_OF_STOCK)}
                 active={activeFilter === FILTER_OUT_OF_STOCK}
               />
+              <div className="hidden md:block">
               <StatCard
                 icon={Sparkles}
                 label="Recently Added"
@@ -563,19 +576,20 @@ export function Inventory() {
                 onClick={() => toggleFilter(FILTER_RECENT)}
                 active={activeFilter === FILTER_RECENT}
               />
+              </div>
             </div>
           )}
 
           {/* Filters — category browsing only; Low Stock / Out of Stock /
               Recently Added live as cards above instead of duplicating here. */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-2 md:gap-3">
             {!isLoading && (
               <div className="overflow-x-auto flex-1">
-                <div className="inline-flex h-9 items-center gap-1 rounded-lg bg-muted/50 p-1 w-max">
+                <div className="inline-flex h-8 md:h-9 items-center gap-1 rounded-lg bg-muted/50 p-1 w-max">
                   <button
                     onClick={() => setActiveFilter(FILTER_ALL)}
                     className={cn(
-                      "px-3 py-1 rounded-md text-sm font-medium whitespace-nowrap transition-all",
+                      "px-2.5 md:px-3 py-1 rounded-md text-xs md:text-sm font-medium whitespace-nowrap transition-all",
                       activeFilter === FILTER_ALL ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                     )}
                   >
@@ -586,7 +600,7 @@ export function Inventory() {
                       key={cat}
                       onClick={() => setActiveFilter(cat)}
                       className={cn(
-                        "px-3 py-1 rounded-md text-sm font-medium whitespace-nowrap transition-all",
+                        "px-2.5 md:px-3 py-1 rounded-md text-xs md:text-sm font-medium whitespace-nowrap transition-all",
                         activeFilter.toLowerCase() === cat.toLowerCase() ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                       )}
                     >
@@ -598,11 +612,11 @@ export function Inventory() {
               </div>
             )}
             <div className="relative w-full sm:w-56 shrink-0">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground md:top-2.5" />
               <Input
                 type="search"
                 placeholder="Search products..."
-                className="pl-9 bg-muted/50 border-none"
+                className="h-8 md:h-9 pl-9 text-xs md:text-sm bg-muted/50 border-none"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -611,7 +625,7 @@ export function Inventory() {
 
           {/* Content */}
           {isLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 md:gap-4">
               {Array.from({ length: 8 }).map((_, i) => <ProductCardSkeleton key={i} />)}
             </div>
           ) : (products?.length ?? 0) === 0 ? (
@@ -624,7 +638,7 @@ export function Inventory() {
             </div>
           ) : isBrowsingCollections && categories.length > 0 ? (
             // ── Collection browsing: one section per category ──────────────
-            <div className="space-y-8">
+            <div className="space-y-5 md:space-y-8">
               {categories.map((cat) => (
                 <CategorySection
                   key={cat}
@@ -638,7 +652,7 @@ export function Inventory() {
           ) : isBrowsingCollections ? (
             // Safety net: products exist but no category could be derived from
             // them — fall back to a single flat grid rather than a blank page.
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 md:gap-4">
               {(products ?? []).map((product) => (
                 <ProductCard key={product.id} product={product} {...cardHandlers} />
               ))}
@@ -665,7 +679,7 @@ export function Inventory() {
                 )}
               </div>
               {flatFilteredProducts.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 md:gap-4">
                   {flatFilteredProducts.map((product) => (
                     <ProductCard key={product.id} product={product} {...cardHandlers} />
                   ))}
@@ -688,20 +702,20 @@ export function Inventory() {
 
       {/* ── SOLD HISTORY TAB ─────────────────────────── */}
       {mainTab === "sold" && (
-        <div className="space-y-4">
+        <div className="space-y-3 md:space-y-4">
           {/* Summary + search */}
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-            <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+            <div className="w-full sm:w-auto rounded-xl border border-border bg-card px-3 py-2.5 md:px-4 md:py-3 shadow-sm">
               <p className="text-xs text-muted-foreground font-medium">Total revenue from sales</p>
-              <p className="text-xl font-bold text-primary mt-0.5">{formatCurrency(totalSalesRevenue)}</p>
+              <p className="text-lg md:text-xl font-bold text-primary mt-0.5">{formatCurrency(totalSalesRevenue)}</p>
               <p className="text-[11px] text-muted-foreground mt-0.5">{allSales?.length ?? 0} sale{(allSales?.length ?? 0) !== 1 ? "s" : ""} recorded</p>
             </div>
             <div className="relative w-full sm:w-56">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground md:top-2.5" />
               <Input
                 type="search"
                 placeholder="Search sales..."
-                className="pl-9 bg-muted/50 border-none"
+                className="h-8 md:h-9 pl-9 text-xs md:text-sm bg-muted/50 border-none"
                 value={soldSearch}
                 onChange={(e) => setSoldSearch(e.target.value)}
               />
