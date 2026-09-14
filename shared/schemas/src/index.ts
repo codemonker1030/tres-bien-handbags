@@ -9,3 +9,4 @@ export * from "./sales";
 export * from "./expenses";
 export * from "./tasks";
 export * from "./dashboard";
+export * from "./stock-purchases";
