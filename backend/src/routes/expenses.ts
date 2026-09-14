@@ -24,68 +24,110 @@ function mapExpense(exp: typeof expensesTable.$inferSelect) {
 }
 
 router.get("/expenses", async (req, res): Promise<void> => {
-  const expenses = await db.select().from(expensesTable).orderBy(expensesTable.date);
+  const expenses = await db
+    .select()
+    .from(expensesTable)
+    .orderBy(expensesTable.date);
+
   res.json(ListExpensesResponse.parse(expenses.map(mapExpense)));
 });
 
 router.post("/expenses", async (req, res): Promise<void> => {
   const parsed = CreateExpenseBody.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [expense] = await db.insert(expensesTable).values(parsed.data).returning();
+
+  const { amount, ...expenseData } = parsed.data;
+
+  const [expense] = await db
+    .insert(expensesTable)
+    .values({
+      ...expenseData,
+      amount: amount.toFixed(2),
+    })
+    .returning();
+
   res.status(201).json(GetExpenseResponse.parse(mapExpense(expense)));
 });
 
 router.get("/expenses/:id", async (req, res): Promise<void> => {
   const params = GetExpenseParams.safeParse(req.params);
+
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [expense] = await db.select().from(expensesTable).where(eq(expensesTable.id, params.data.id));
+
+  const [expense] = await db
+    .select()
+    .from(expensesTable)
+    .where(eq(expensesTable.id, params.data.id));
+
   if (!expense) {
     res.status(404).json({ error: "Expense not found" });
     return;
   }
+
   res.json(GetExpenseResponse.parse(mapExpense(expense)));
 });
 
 router.patch("/expenses/:id", async (req, res): Promise<void> => {
   const params = UpdateExpenseParams.safeParse(req.params);
+
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
+
   const parsed = UpdateExpenseBody.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+
+  const { amount, ...expenseData } = parsed.data;
+
   const [expense] = await db
     .update(expensesTable)
-    .set(parsed.data)
+    .set({
+      ...expenseData,
+      ...(amount !== undefined
+        ? { amount: amount.toFixed(2) }
+        : {}),
+    })
     .where(eq(expensesTable.id, params.data.id))
     .returning();
+
   if (!expense) {
     res.status(404).json({ error: "Expense not found" });
     return;
   }
+
   res.json(UpdateExpenseResponse.parse(mapExpense(expense)));
 });
 
 router.delete("/expenses/:id", async (req, res): Promise<void> => {
   const params = DeleteExpenseParams.safeParse(req.params);
+
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [expense] = await db.delete(expensesTable).where(eq(expensesTable.id, params.data.id)).returning();
+
+  const [expense] = await db
+    .delete(expensesTable)
+    .where(eq(expensesTable.id, params.data.id))
+    .returning();
+
   if (!expense) {
     res.status(404).json({ error: "Expense not found" });
     return;
   }
+
   res.sendStatus(204);
 });
 
