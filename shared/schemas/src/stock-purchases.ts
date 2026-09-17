@@ -1,16 +1,109 @@
 import * as zod from "zod";
 
-// ─── Shared nested schemas ────────────────────────────────────────────────────
+// ─── New product ──────────────────────────────────────────────────────────────
 
-export const StockPurchaseItemInput = zod.object({
-  productId: zod.number().int().positive(),
-  quantity: zod.number().int().positive(),
-  unitBuyingPrice: zod.number().min(0),
+/**
+ * Minimum product information required when a completely new
+ * catalog product is introduced during procurement.
+ *
+ * The owner can enrich the product later from Inventory.
+ */
+export const NewStockPurchaseProductInput = zod.object({
+  name: zod
+    .string()
+    .trim()
+    .min(1, "Product name is required"),
+
+  category: zod
+    .string()
+    .trim()
+    .min(1, "Product category is required"),
+
+  /**
+   * Intended/current selling price.
+   * Buying cost is kept on the purchase line because it belongs
+   * to this specific procurement.
+   */
+  price: zod.number().min(0),
+
+  imageUrl: zod
+    .string()
+    .trim()
+    .optional(),
+
+  brand: zod
+    .string()
+    .trim()
+    .optional(),
+
+  description: zod
+    .string()
+    .trim()
+    .optional(),
+
+  lowStockThreshold: zod
+    .number()
+    .int()
+    .min(0)
+    .optional(),
 });
 
+// ─── Purchase item variants ───────────────────────────────────────────────────
+
+export const ExistingStockPurchaseItemInput = zod.object({
+  type: zod.literal("existing"),
+
+  productId: zod
+    .number()
+    .int()
+    .positive(),
+
+  quantity: zod
+    .number()
+    .int()
+    .positive(),
+
+  unitBuyingPrice: zod
+    .number()
+    .min(0),
+});
+
+export const NewStockPurchaseItemInput = zod.object({
+  type: zod.literal("new"),
+
+  product: NewStockPurchaseProductInput,
+
+  quantity: zod
+    .number()
+    .int()
+    .positive(),
+
+  unitBuyingPrice: zod
+    .number()
+    .min(0),
+});
+
+/**
+ * A procurement line can either replenish an existing catalog
+ * product or create a completely new product.
+ */
+export const StockPurchaseItemInput =
+  zod.discriminatedUnion("type", [
+    ExistingStockPurchaseItemInput,
+    NewStockPurchaseItemInput,
+  ]);
+
+// ─── Shared purchase costs ────────────────────────────────────────────────────
+
 export const StockPurchaseCostInput = zod.object({
-  label: zod.string().trim().min(1, "Cost label is required"),
-  amount: zod.number().min(0),
+  label: zod
+    .string()
+    .trim()
+    .min(1, "Cost label is required"),
+
+  amount: zod
+    .number()
+    .min(0),
 });
 
 // ─── Create purchase ──────────────────────────────────────────────────────────
@@ -31,11 +124,16 @@ export const CreateStockPurchaseBody = zod
      * ISO date/datetime string from the frontend.
      * Example: 2026-09-14
      */
-    purchaseDate: zod.string().min(1),
+    purchaseDate: zod
+      .string()
+      .min(1),
 
     items: zod
       .array(StockPurchaseItemInput)
-      .min(1, "At least one product is required"),
+      .min(
+        1,
+        "At least one product is required",
+      ),
 
     /**
      * Flexible direct procurement costs:
@@ -51,7 +149,9 @@ export const CreateStockPurchaseBody = zod
      * It may be lower than the final procurement total,
      * in which case the backend creates supplier debt.
      */
-    amountPaid: zod.number().min(0),
+    amountPaid: zod
+      .number()
+      .min(0),
 
     notes: zod
       .string()
@@ -59,13 +159,14 @@ export const CreateStockPurchaseBody = zod
       .optional(),
   })
   .superRefine((data, ctx) => {
-    const goodsTotal = data.items.reduce(
-      (sum, item) =>
-        sum +
-        item.quantity *
-          item.unitBuyingPrice,
-      0,
-    );
+    const goodsTotal =
+      data.items.reduce(
+        (sum, item) =>
+          sum +
+          item.quantity *
+            item.unitBuyingPrice,
+        0,
+      );
 
     const sharedCostsTotal =
       data.sharedCosts.reduce(
@@ -85,13 +186,57 @@ export const CreateStockPurchaseBody = zod
           "Amount paid cannot exceed the total procurement cost",
       });
     }
+
+    /**
+     * Prevent the same existing product from being entered twice
+     * in one procurement. The owner should change its quantity
+     * instead.
+     *
+     * New products are intentionally excluded because they do not
+     * have database IDs yet.
+     */
+    const existingProductIds =
+      data.items
+        .filter(
+          (
+            item,
+          ): item is zod.infer<
+            typeof ExistingStockPurchaseItemInput
+          > => item.type === "existing",
+        )
+        .map(
+          (item) => item.productId,
+        );
+
+    const duplicateExistingProduct =
+      existingProductIds.find(
+        (productId, index) =>
+          existingProductIds.indexOf(
+            productId,
+          ) !== index,
+      );
+
+    if (
+      duplicateExistingProduct !==
+      undefined
+    ) {
+      ctx.addIssue({
+        code: zod.ZodIssueCode.custom,
+        path: ["items"],
+        message:
+          "The same existing product cannot appear more than once in a stock purchase",
+      });
+    }
   });
 
 // ─── Route params ─────────────────────────────────────────────────────────────
 
 export const GetStockPurchaseParams =
   zod.object({
-    id: zod.coerce.number().int().positive(),
+    id: zod.coerce
+      .number()
+      .int()
+      .positive(),
   });
 
 // ─── Response schemas ─────────────────────────────────────────────────────────
@@ -111,7 +256,9 @@ export const StockPurchaseItemResponse =
     purchaseId: zod.number(),
     productId: zod.number(),
 
-    productName: zod.string().optional(),
+    productName: zod
+      .string()
+      .optional(),
 
     quantity: zod.number(),
 
@@ -119,7 +266,8 @@ export const StockPurchaseItemResponse =
 
     goodsSubtotal: zod.number(),
 
-    allocatedSharedCost: zod.number(),
+    allocatedSharedCost:
+      zod.number(),
 
     landedSubtotal: zod.number(),
 
@@ -142,7 +290,8 @@ export const StockPurchaseResponse =
 
     goodsTotal: zod.number(),
 
-    sharedCostsTotal: zod.number(),
+    sharedCostsTotal:
+      zod.number(),
 
     totalCost: zod.number(),
 

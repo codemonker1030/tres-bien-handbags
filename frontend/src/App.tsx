@@ -9,6 +9,7 @@ import { Layout } from "@/components/app-shell/layout";
 import { Dashboard } from "@/pages/dashboard";
 import { Inventory } from "@/pages/inventory";
 import { ProductDetail } from "@/pages/product-detail";
+import { Purchases } from "@/pages/purchases";
 import { Sales } from "@/pages/sales";
 import { Debts } from "@/pages/debts";
 import { Expenses } from "@/pages/expenses";
@@ -38,6 +39,7 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/inventory" component={Inventory} />
         <Route path="/inventory/:id" component={ProductDetail} />
+        <Route path="/purchases" component={Purchases} />
         <Route path="/sales" component={Sales} />
         <Route path="/debts" component={Debts} />
         <Route path="/expenses" component={Expenses} />

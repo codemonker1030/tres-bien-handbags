@@ -13,6 +13,7 @@ import {
   Landmark,
   MoreHorizontal,
   X,
+  PackagePlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/app-shell/theme-provider";
@@ -24,6 +25,7 @@ interface LayoutProps {
 const desktopNavItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/inventory", label: "Inventory", icon: Package },
+  { href: "/purchases", label: "Purchases", icon: PackagePlus },
   { href: "/sales", label: "Sales", icon: ShoppingCart },
   { href: "/debts", label: "Debts", icon: Landmark },
   { href: "/expenses", label: "Expenses", icon: Receipt },
@@ -38,6 +40,7 @@ const mobileNavItems = [
 ];
 
 const moreItems = [
+  { href: "/purchases", label: "Purchases", icon: PackagePlus },
   { href: "/expenses", label: "Expenses", icon: Receipt },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
 ];

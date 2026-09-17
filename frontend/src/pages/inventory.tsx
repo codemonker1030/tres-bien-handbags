@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Edit,
   Package,
+  PackagePlus,
   Banknote,
   Smartphone,
   ShoppingBag,
@@ -31,6 +32,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ProductDialog } from "@/components/dialogs/product-dialog";
 import { AddProductDialog } from "@/components/dialogs/add-product-dialog";
 import { RecordSaleDialog } from "@/components/dialogs/record-sale-dialog";
+import { StockPurchaseDialog } from "@/components/dialogs/stock-purchase-dialog";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 
@@ -374,6 +376,7 @@ export function Inventory() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [stockPurchaseOpen, setStockPurchaseOpen] = useState(false);
   const [sellProductId, setSellProductId] = useState<number | null>(null);
 
   const { data: products, isLoading } = useListProducts();
@@ -491,23 +494,40 @@ export function Inventory() {
     <div className="space-y-3 md:space-y-5 animate-in fade-in duration-500">
 
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Inventory</h2>
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
+            Inventory
+          </h2>
+
           <p className="hidden md:block text-sm text-muted-foreground mt-0.5">
-            Your boutique's collection, organized.
+            Your stock, purchases and product collection.
           </p>
         </div>
 
-        <Button
-          onClick={() => setAddDialogOpen(true)}
-          size="sm"
-          className="h-8 px-2.5 md:h-9 md:px-4 shrink-0"
-        >
-          <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 md:mr-2" />
-          <span className="hidden md:inline">Add Product</span>
-          <span className="md:hidden ml-1">Add</span>
-        </Button>
+        <div className="flex items-center gap-1.5 md:gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setAddDialogOpen(true)}
+            className="h-8 px-2 md:h-9 md:px-3 shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
+            <span className="hidden sm:inline ml-1.5">New Product</span>
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setStockPurchaseOpen(true)}
+            className="h-8 px-2.5 md:h-9 md:px-4 shrink-0"
+          >
+            <PackagePlus className="w-3.5 h-3.5 md:w-4 md:h-4 md:mr-2" />
+            <span className="hidden md:inline">Record Purchase</span>
+            <span className="md:hidden ml-1">Purchase</span>
+          </Button>
+        </div>
       </div>
 
       {/* Main tab: In Stock / Sold */}
@@ -634,7 +654,9 @@ export function Inventory() {
                 <Package className="w-8 h-8 opacity-40" />
               </div>
               <p className="font-medium text-foreground">Your inventory is empty</p>
-              <p className="text-sm mt-1">Tap Add Product to start building your collection.</p>
+              <p className="text-sm mt-1 text-center">
+                Create your first product, then record a stock purchase.
+              </p>
             </div>
           ) : isBrowsingCollections && categories.length > 0 ? (
             // ── Collection browsing: one section per category ──────────────
@@ -761,6 +783,11 @@ export function Inventory() {
       <AddProductDialog
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
+      />
+
+      <StockPurchaseDialog
+        open={stockPurchaseOpen}
+        onOpenChange={setStockPurchaseOpen}
       />
 
       <RecordSaleDialog

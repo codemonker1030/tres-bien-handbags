@@ -233,30 +233,42 @@ router.post(
       const created =
         await db.transaction(
           async (tx) => {
-            // ── Validate referenced products ────────
-            const productIds =
-              data.items.map(
+            // ── Resolve purchase products ─────────────
+            //
+            // Existing lines reference products already in the catalog.
+            // New lines create their catalog product inside THIS transaction.
+            // Nothing is committed unless the entire procurement succeeds.
+
+            const existingItems =
+              data.items.filter(
                 (item) =>
-                  item.productId,
+                  item.type === "existing",
+              );
+
+            const existingProductIds =
+              existingItems.map(
+                (item) => item.productId,
               );
 
             const uniqueProductIds = [
-              ...new Set(productIds),
+              ...new Set(existingProductIds),
             ];
 
-            const products =
-              await tx
-                .select()
-                .from(productsTable)
-                .where(
-                  inArray(
-                    productsTable.id,
-                    uniqueProductIds,
-                  ),
-                );
+            const existingProducts =
+              uniqueProductIds.length > 0
+                ? await tx
+                    .select()
+                    .from(productsTable)
+                    .where(
+                      inArray(
+                        productsTable.id,
+                        uniqueProductIds,
+                      ),
+                    )
+                : [];
 
             if (
-              products.length !==
+              existingProducts.length !==
               uniqueProductIds.length
             ) {
               throw new Error(
@@ -266,7 +278,7 @@ router.post(
 
             const productMap =
               new Map(
-                products.map(
+                existingProducts.map(
                   (product) => [
                     product.id,
                     product,
@@ -274,9 +286,77 @@ router.post(
                 ),
               );
 
+            const resolvedItems: Array<{
+              productId: number;
+              quantity: number;
+              unitBuyingPrice: number;
+            }> = [];
+
+            for (const item of data.items) {
+              if (item.type === "existing") {
+                resolvedItems.push({
+                  productId: item.productId,
+                  quantity: item.quantity,
+                  unitBuyingPrice:
+                    item.unitBuyingPrice,
+                });
+
+                continue;
+              }
+
+              const [newProduct] =
+                await tx
+                  .insert(productsTable)
+                  .values({
+                    name: item.product.name,
+                    category:
+                      item.product.category,
+                    brand:
+                      item.product.brand ||
+                      null,
+                    description:
+                      item.product.description ||
+                      "",
+                    imageUrl:
+                      item.product.imageUrl ||
+                      null,
+                    price: moneyString(
+                      item.product.price,
+                    ),
+                    stock: 0,
+                    lowStockThreshold:
+                      item.product
+                        .lowStockThreshold ??
+                      1,
+                    buyingPrice:
+                      moneyString(
+                        item.unitBuyingPrice,
+                      ),
+                    supplier:
+                      data.supplierName,
+                    purchaseDate:
+                      new Date(
+                        data.purchaseDate,
+                      ),
+                  })
+                  .returning();
+
+              productMap.set(
+                newProduct.id,
+                newProduct,
+              );
+
+              resolvedItems.push({
+                productId: newProduct.id,
+                quantity: item.quantity,
+                unitBuyingPrice:
+                  item.unitBuyingPrice,
+              });
+            }
+
             // ── Calculate goods totals ──────────────
             const baseLines =
-              data.items.map(
+              resolvedItems.map(
                 (item) => {
                   const goodsSubtotal =
                     roundMoney(
