@@ -143,13 +143,13 @@ export function ProductDetail() {
       {/* ── Header: large image, name, category, status, stock ── */}
       <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
         {product.imageUrl ? (
-          <img src={product.imageUrl} alt={product.name} className="w-full h-52 sm:h-64 object-cover" />
+          <img src={product.imageUrl} alt={product.name} className="w-full h-44 sm:h-64 object-cover" />
         ) : (
-          <div className="w-full h-52 sm:h-64 bg-muted flex items-center justify-center text-muted-foreground/30">
+          <div className="w-full h-44 sm:h-64 bg-muted flex items-center justify-center text-muted-foreground/30">
             <Package className="w-16 h-16" />
           </div>
         )}
-        <div className="px-3.5 py-3 space-y-1.5">
+        <div className="px-3.5 py-2.5 space-y-1">
           <div className="flex items-start justify-between gap-2">
             <h1 className="text-base font-semibold text-foreground leading-tight">{product.name}</h1>
             <span className={cn("shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold", statusClasses)}>
@@ -171,14 +171,14 @@ export function ProductDetail() {
       </Button>
 
       {/* ── Tabs ── */}
-      <div className="overflow-x-auto -mx-1 px-1">
-        <div className="inline-flex h-8 items-center gap-0.5 rounded-lg bg-muted/50 p-0.5 w-max min-w-full">
+      <div className="overflow-x-auto overscroll-x-contain scroll-smooth -mx-1 px-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <div className="inline-flex h-8 items-center gap-0.5 rounded-lg bg-muted/50 p-0.5 w-max">
           {TABS.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
               className={cn(
-                "flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-all",
+                "flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-all",
                 activeTab === key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
               )}
             >
