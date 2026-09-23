@@ -123,11 +123,11 @@ export function ProductDetail() {
     : "bg-emerald-500 text-white";
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-300 max-w-lg mx-auto">
+    <div className="space-y-3 animate-in fade-in duration-300 max-w-lg mx-auto">
 
       {/* Back + actions */}
       <div className="flex items-center justify-between">
-        <button onClick={() => navigate("/inventory")} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={() => navigate("/inventory")} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back to Inventory
         </button>
         <div className="flex items-center gap-1">
@@ -141,22 +141,22 @@ export function ProductDetail() {
       </div>
 
       {/* ── Header: large image, name, category, status, stock ── */}
-      <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
         {product.imageUrl ? (
-          <img src={product.imageUrl} alt={product.name} className="w-full aspect-square object-cover" />
+          <img src={product.imageUrl} alt={product.name} className="w-full h-52 sm:h-64 object-cover" />
         ) : (
-          <div className="w-full aspect-square bg-muted flex items-center justify-center text-muted-foreground/30">
+          <div className="w-full h-52 sm:h-64 bg-muted flex items-center justify-center text-muted-foreground/30">
             <Package className="w-16 h-16" />
           </div>
         )}
-        <div className="p-4 space-y-2">
+        <div className="px-3.5 py-3 space-y-1.5">
           <div className="flex items-start justify-between gap-2">
-            <h1 className="text-xl font-bold text-foreground">{product.name}</h1>
-            <span className={cn("shrink-0 px-2 py-1 rounded-full text-[11px] font-semibold", statusClasses)}>
+            <h1 className="text-base font-semibold text-foreground leading-tight">{product.name}</h1>
+            <span className={cn("shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold", statusClasses)}>
               {statusLabel}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <span>{template.emoji} {product.category}</span>
             <span className="opacity-40">·</span>
             <span>{product.stock} in stock</span>
@@ -165,24 +165,24 @@ export function ProductDetail() {
       </div>
 
       {/* Record a sale */}
-      <Button className="w-full" size="lg" onClick={() => setSellDialogOpen(true)} disabled={status === "out-of-stock"}>
+      <Button className="w-full h-10 text-sm font-semibold" onClick={() => setSellDialogOpen(true)} disabled={status === "out-of-stock"}>
         <ShoppingBag className="w-4 h-4 mr-2" />
         Record a Sale
       </Button>
 
       {/* ── Tabs ── */}
       <div className="overflow-x-auto -mx-1 px-1">
-        <div className="inline-flex h-9 items-center gap-1 rounded-lg bg-muted/50 p-1 w-max min-w-full">
+        <div className="inline-flex h-8 items-center gap-0.5 rounded-lg bg-muted/50 p-0.5 w-max min-w-full">
           {TABS.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium whitespace-nowrap transition-all",
+                "flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-all",
                 activeTab === key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
               )}
             >
-              <Icon className="w-3.5 h-3.5" /> {label}
+              <Icon className="w-3 h-3" /> {label}
             </button>
           ))}
         </div>
@@ -190,8 +190,8 @@ export function ProductDetail() {
 
       {/* ── Overview tab ── */}
       {activeTab === "overview" && (
-        <div className="rounded-2xl border border-border bg-card p-4 space-y-3 animate-in fade-in duration-200">
-          <dl className="space-y-2.5 text-sm">
+        <div className="rounded-xl border border-border bg-card p-3 space-y-3 animate-in fade-in duration-200">
+          <dl className="space-y-2 text-xs">
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Product Name</dt>
               <dd className="font-medium text-foreground text-right">{product.name}</dd>
@@ -228,8 +228,8 @@ export function ProductDetail() {
 
       {/* ── Inventory tab ── */}
       {activeTab === "inventory" && (
-        <div className="rounded-2xl border border-border bg-card p-4 animate-in fade-in duration-200">
-          <dl className="space-y-2.5 text-sm">
+        <div className="rounded-xl border border-border bg-card p-3 animate-in fade-in duration-200">
+          <dl className="space-y-2 text-xs">
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Current Quantity</dt>
               <dd className="font-bold text-foreground text-right">{product.stock} units</dd>
@@ -256,8 +256,8 @@ export function ProductDetail() {
 
       {/* ── Attributes tab — driven entirely by the category template ── */}
       {activeTab === "attributes" && (
-        <div className="rounded-2xl border border-border bg-card p-4 space-y-3 animate-in fade-in duration-200">
-          <dl className="space-y-2.5 text-sm">
+        <div className="rounded-xl border border-border bg-card p-3 space-y-3 animate-in fade-in duration-200">
+          <dl className="space-y-2 text-xs">
             {template.attributes.map((attr) => {
               const attributes =
                 product.attributes &&
@@ -325,13 +325,13 @@ export function ProductDetail() {
           {product.images && product.images.length > 0 ? (
             <div className="grid grid-cols-2 gap-2">
               {product.images.map((url, i) => (
-                <img key={url + i} src={url} alt={`${product.name} ${i + 1}`} className="w-full aspect-square object-cover rounded-xl border border-border" />
+                <img key={url + i} src={url} alt={`${product.name} ${i + 1}`} className="w-full aspect-square object-cover rounded-lg border border-border" />
               ))}
             </div>
           ) : product.imageUrl ? (
-            <img src={product.imageUrl} alt={product.name} className="w-full aspect-square object-cover rounded-xl border border-border" />
+            <img src={product.imageUrl} alt={product.name} className="w-full aspect-square object-cover rounded-lg border border-border" />
           ) : (
-            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground bg-muted/30 rounded-xl">
+            <div className="flex flex-col items-center justify-center py-10 text-muted-foreground bg-muted/30 rounded-lg">
               <Images className="w-10 h-10 opacity-20 mb-2" />
               <p className="text-sm">No photos uploaded yet.</p>
             </div>
@@ -341,10 +341,10 @@ export function ProductDetail() {
 
       {/* ── History tab ── */}
       {activeTab === "history" && (
-        <div className="space-y-2 animate-in fade-in duration-200">
+        <div className="space-y-1.5 animate-in fade-in duration-200">
           {/* Product created */}
-          <div className="flex items-center gap-3 bg-card border border-border rounded-xl p-3">
-            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+          <div className="flex items-center gap-2.5 bg-card border border-border rounded-lg px-3 py-2.5">
+            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
               <PlusCircle className="w-4 h-4 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
@@ -355,8 +355,8 @@ export function ProductDetail() {
 
           {/* Last updated — only if it actually differs from creation */}
           {product.updatedAt !== product.createdAt && (
-            <div className="flex items-center gap-3 bg-card border border-border rounded-xl p-3">
-              <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+            <div className="flex items-center gap-2.5 bg-card border border-border rounded-lg px-3 py-2.5">
+              <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
                 <RefreshCw className="w-4 h-4 text-muted-foreground" />
               </div>
               <div className="flex-1 min-w-0">
@@ -375,9 +375,9 @@ export function ProductDetail() {
               const isCredit = remaining > 0 && remaining >= sale.exactSellingPrice;
               const isPartial = remaining > 0 && !isCredit;
               return (
-                <div key={sale.id} className="flex items-center gap-3 bg-card border border-border rounded-xl p-3">
+                <div key={sale.id} className="flex items-center gap-2.5 bg-card border border-border rounded-lg px-3 py-2.5">
                   <div className={cn(
-                    "w-9 h-9 rounded-full flex items-center justify-center shrink-0",
+                    "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
                     isCredit ? "bg-red-100 dark:bg-red-900/40"
                     : isPartial ? "bg-amber-100 dark:bg-amber-900/40"
                     : sale.paymentMethod === "mpesa" ? "bg-blue-100 dark:bg-blue-900/40"
