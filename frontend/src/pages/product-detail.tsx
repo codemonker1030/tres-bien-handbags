@@ -259,7 +259,24 @@ export function ProductDetail() {
         <div className="rounded-2xl border border-border bg-card p-4 space-y-3 animate-in fade-in duration-200">
           <dl className="space-y-2.5 text-sm">
             {template.attributes.map((attr) => {
-              const value = product[attr.key as keyof Product];
+              const attributes =
+                product.attributes &&
+                typeof product.attributes === "object" &&
+                !Array.isArray(product.attributes)
+                  ? (product.attributes as Record<string, unknown>)
+                  : {};
+
+              // New products store their full category-specific data in
+              // `attributes`. Fall back to the legacy top-level columns so
+              // products created before the attributes migration still render.
+              const attributeValue = attributes[attr.key];
+              const legacyValue = product[attr.key as keyof Product];
+
+              const value =
+                attributeValue != null && attributeValue !== ""
+                  ? attributeValue
+                  : legacyValue;
+
               return (
                 <div key={attr.key} className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">{attr.label}</dt>

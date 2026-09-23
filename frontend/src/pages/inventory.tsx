@@ -156,107 +156,213 @@ function ProductCard({
   const status = getStockStatus(product);
 
   return (
-    <div className="group rounded-xl md:rounded-2xl bg-card border border-border overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 flex flex-col">
-      {/* Photo area — tap to view detail */}
+    <>
+      {/* Mobile — compact operational row */}
       <div
-        className="relative aspect-[1/1] md:aspect-[4/5] bg-muted overflow-hidden cursor-pointer"
+        className="md:hidden flex items-center gap-3 rounded-xl border border-border bg-card p-2.5 shadow-sm active:bg-muted/30 transition-colors"
         onClick={() => onNavigate(product.id)}
       >
-        {product.imageUrl ? (
-          <img
-            src={product.imageUrl}
-            alt={product.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            onError={(e) => {
-              const t = e.target as HTMLImageElement;
-              t.style.display = "none";
-              t.nextElementSibling?.classList.remove("hidden");
-            }}
-          />
-        ) : null}
-        {/* Fallback placeholder */}
+        <div className="relative h-[68px] w-[68px] shrink-0 overflow-hidden rounded-lg bg-muted">
+          {product.imageUrl ? (
+            <img
+              src={product.imageUrl}
+              alt={product.name}
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                const t = e.target as HTMLImageElement;
+                t.style.display = "none";
+                t.nextElementSibling?.classList.remove("hidden");
+              }}
+            />
+          ) : null}
+
+          <div
+            className={cn(
+              "absolute inset-0 flex items-center justify-center text-muted-foreground/40",
+              product.imageUrl ? "hidden" : "",
+            )}
+          >
+            <Package className="h-5 w-5" />
+          </div>
+        </div>
+
+        <div className="min-w-0 flex-1 self-stretch flex flex-col justify-center">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="truncate text-[13px] font-semibold leading-4 text-foreground">
+                {product.name}
+              </h3>
+
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                {getCategoryEmoji(product.category)} {product.category}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              aria-label={`Edit ${product.name}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(product);
+              }}
+              className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Edit className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <div className="mt-auto flex items-end justify-between gap-2">
+            <div>
+              <p className="text-[13px] font-bold leading-4 text-primary">
+                {formatCurrency(product.price)}
+              </p>
+
+              <p
+                className={cn(
+                  "mt-0.5 text-[10px] font-medium leading-3",
+                  status === "out-of-stock"
+                    ? "text-destructive"
+                    : status === "low-stock"
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-muted-foreground",
+                )}
+              >
+                {status === "out-of-stock"
+                  ? "Out of stock"
+                  : status === "low-stock"
+                    ? `Low stock · ${product.stock} left`
+                    : `${product.stock} in stock`}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              disabled={status === "out-of-stock"}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSell(product.id);
+              }}
+              className={cn(
+                "h-7 rounded-lg px-3 text-[11px] font-semibold transition-colors",
+                status === "out-of-stock"
+                  ? "bg-muted text-muted-foreground cursor-not-allowed"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90",
+              )}
+            >
+              Sell
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop — visual catalogue card */}
+      <div className="group hidden md:flex rounded-2xl bg-card border border-border overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 flex-col">
         <div
-          className={cn(
-            "absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/40",
-            product.imageUrl ? "hidden" : "",
-          )}
+          className="relative aspect-[4/5] bg-muted overflow-hidden cursor-pointer"
+          onClick={() => onNavigate(product.id)}
         >
-          <Package className="w-8 h-8 md:w-12 md:h-12" />
-          <span className="text-[10px] md:text-xs mt-1.5 md:mt-2 font-medium uppercase tracking-widest">No photo</span>
-        </div>
+          {product.imageUrl ? (
+            <img
+              src={product.imageUrl}
+              alt={product.name}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              onError={(e) => {
+                const t = e.target as HTMLImageElement;
+                t.style.display = "none";
+                t.nextElementSibling?.classList.remove("hidden");
+              }}
+            />
+          ) : null}
 
-        {/* Stock status */}
-        <div className="absolute top-1.5 left-1.5 md:top-2.5 md:left-2.5">
-          <StockBadge status={status} stock={product.stock} />
-        </div>
-
-        {/* Category badge */}
-        <div className="absolute top-1.5 right-1.5 md:top-2.5 md:right-2.5">
-          <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-black/55 text-white shadow-sm backdrop-blur-sm">
-            {getCategoryEmoji(product.category)} {product.category}
-          </span>
-        </div>
-
-        {/* Desktop hover overlay — quick actions: View, Edit, Sell */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0 transition-opacity hidden md:flex items-end justify-center pb-3 gap-1.5 opacity-0 group-hover:opacity-100">
-          <Button
-            size="sm"
-            variant="secondary"
-            className="h-7 px-2 text-xs shadow"
-            onClick={(e) => { e.stopPropagation(); onNavigate(product.id); }}
+          <div
+            className={cn(
+              "absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/40",
+              product.imageUrl ? "hidden" : "",
+            )}
           >
-            <Eye className="w-3 h-3 mr-1" /> View
-          </Button>
+            <Package className="w-12 h-12" />
+            <span className="text-xs mt-2 font-medium uppercase tracking-widest">
+              No photo
+            </span>
+          </div>
+
+          <div className="absolute top-2.5 left-2.5">
+            <StockBadge status={status} stock={product.stock} />
+          </div>
+
+          <div className="absolute top-2.5 right-2.5">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-black/55 text-white shadow-sm backdrop-blur-sm">
+              {getCategoryEmoji(product.category)} {product.category}
+            </span>
+          </div>
+
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0 transition-opacity flex items-end justify-center pb-3 gap-1.5 opacity-0 group-hover:opacity-100">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-7 px-2 text-xs shadow"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigate(product.id);
+              }}
+            >
+              <Eye className="w-3 h-3 mr-1" />
+              View
+            </Button>
+
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-7 px-2 text-xs shadow"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(product);
+              }}
+            >
+              <Edit className="w-3 h-3 mr-1" />
+              Edit
+            </Button>
+
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-7 px-2 text-xs shadow"
+              disabled={status === "out-of-stock"}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSell(product.id);
+              }}
+            >
+              <ShoppingBag className="w-3 h-3 mr-1" />
+              Sell
+            </Button>
+          </div>
+        </div>
+
+        <div className="p-3.5 flex flex-col gap-1.5 flex-1">
+          <h3 className="font-semibold text-sm text-foreground leading-snug line-clamp-2">
+            {product.name}
+          </h3>
+
+          <p className="text-base font-bold text-primary leading-none mt-auto pt-1.5">
+            {formatCurrency(product.price)}
+          </p>
+
           <Button
             size="sm"
-            variant="secondary"
-            className="h-7 px-2 text-xs shadow"
-            onClick={(e) => { e.stopPropagation(); onEdit(product); }}
-          >
-            <Edit className="w-3 h-3 mr-1" /> Edit
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            className="h-7 px-2 text-xs shadow"
+            className="w-full h-8 text-xs mt-1"
             disabled={status === "out-of-stock"}
-            onClick={(e) => { e.stopPropagation(); onSell(product.id); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSell(product.id);
+            }}
           >
-            <ShoppingBag className="w-3 h-3 mr-1" /> Sell
+            <ShoppingBag className="w-3.5 h-3.5 mr-1" />
+            {status === "out-of-stock" ? "Out of stock" : "Sell"}
           </Button>
         </div>
       </div>
-
-      {/* Info */}
-      <div className="p-2.5 md:p-3.5 flex flex-col gap-1 md:gap-1.5 flex-1">
-        <h3 className="font-semibold text-xs md:text-sm text-foreground leading-snug line-clamp-2">{product.name}</h3>
-
-        {/* Selling price */}
-        <p className="text-sm md:text-base font-bold text-primary leading-none mt-auto pt-1 md:pt-1.5">
-          {formatCurrency(product.price)}
-        </p>
-
-        {/* Sell — the primary card action, always visible (not hover-only) so
-            it works on mobile too, matching how often it's actually used. */}
-        <Button
-          size="sm"
-          className="w-full h-7 md:h-8 text-[11px] md:text-xs mt-1"
-          disabled={status === "out-of-stock"}
-          onClick={(e) => { e.stopPropagation(); onSell(product.id); }}
-        >
-          <ShoppingBag className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1" />
-          {status === "out-of-stock" ? "Out of stock" : "Sell"}
-        </Button>
-
-        {/* Mobile: Edit — View is just tapping the card, Sell is the button above */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onEdit(product); }}
-          className="flex items-center justify-center gap-1 h-6 text-[10px] font-medium text-muted-foreground hover:text-foreground md:hidden"
-        >
-          <Edit className="w-3 h-3" /> Edit
-        </button>
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -306,7 +412,7 @@ function CategorySection({
           </button>
         )}
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 md:gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4">
         {preview.map((product) => (
           <ProductCard key={product.id} product={product} {...cardHandlers} />
         ))}
@@ -645,7 +751,7 @@ export function Inventory() {
 
           {/* Content */}
           {isLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 md:gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4">
               {Array.from({ length: 8 }).map((_, i) => <ProductCardSkeleton key={i} />)}
             </div>
           ) : (products?.length ?? 0) === 0 ? (
@@ -674,7 +780,7 @@ export function Inventory() {
           ) : isBrowsingCollections ? (
             // Safety net: products exist but no category could be derived from
             // them — fall back to a single flat grid rather than a blank page.
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 md:gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4">
               {(products ?? []).map((product) => (
                 <ProductCard key={product.id} product={product} {...cardHandlers} />
               ))}
@@ -701,7 +807,7 @@ export function Inventory() {
                 )}
               </div>
               {flatFilteredProducts.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 md:gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4">
                   {flatFilteredProducts.map((product) => (
                     <ProductCard key={product.id} product={product} {...cardHandlers} />
                   ))}

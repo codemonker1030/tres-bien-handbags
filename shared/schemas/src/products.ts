@@ -5,6 +5,14 @@ const sizeQuantitySchema = zod.object({
   quantity: zod.number().min(0),
 });
 
+const productAttributesSchema = zod.record(
+  zod.string(),
+  zod.union([
+    zod.string(),
+    zod.number(),
+  ]),
+);
+
 // A product, as returned by the API.
 const productShape = {
   id: zod.number(),
@@ -38,6 +46,7 @@ const productShape = {
   season: zod.string().nullish(),
   shoeType: zod.string().nullish(),
   sizeQuantities: zod.array(sizeQuantitySchema).nullish(),
+  attributes: productAttributesSchema.nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 };
@@ -84,6 +93,7 @@ export const CreateProductBody = zod.object({
   season: zod.string().optional(),
   shoeType: zod.string().optional(),
   sizeQuantities: zod.array(sizeQuantitySchema).optional(),
+  attributes: productAttributesSchema.optional(),
 });
 
 export const UpdateProductParams = zod.object({ id: zod.coerce.number() });
@@ -118,6 +128,7 @@ export const UpdateProductBody = zod.object({
   season: zod.string().optional(),
   shoeType: zod.string().optional(),
   sizeQuantities: zod.array(sizeQuantitySchema).optional(),
+  attributes: productAttributesSchema.optional(),
 });
 export const UpdateProductResponse = zod.object(productShape);
 

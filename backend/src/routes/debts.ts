@@ -1,6 +1,11 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, customerDebtsTable, supplierDebtsTable } from "@workspace/db";
+import {
+  db,
+  customerDebtsTable,
+  supplierDebtsTable,
+  supplierDebtPaymentsTable,
+} from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -184,17 +189,232 @@ router.patch("/debts/suppliers/:id", async (req, res): Promise<void> => {
 
 router.patch("/debts/suppliers/:id/payment", async (req, res): Promise<void> => {
   const id = parseId(req.params);
-  if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
-  const amountPaid = parsePaymentBody(req.body);
-  if (amountPaid === null) { res.status(400).json({ error: "amountPaid must be >= 0" }); return; }
-  const [existing] = await db.select().from(supplierDebtsTable).where(eq(supplierDebtsTable.id, id));
-  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
-  const newPaid = Math.min(Number(existing.amount), amountPaid);
-  const [row] = await db.update(supplierDebtsTable)
-    .set({ amountPaid: String(newPaid) })
-    .where(eq(supplierDebtsTable.id, id))
-    .returning();
-  res.json(mapSupplier(row));
+
+  if (!id) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const body = req.body as Record<string, unknown>;
+
+  const paymentAmount = Number(
+    body?.amount ?? body?.amountPaid,
+  );
+
+  if (
+    !Number.isFinite(paymentAmount) ||
+    paymentAmount <= 0
+  ) {
+    res.status(400).json({
+      error: "Payment amount must be greater than 0",
+    });
+    return;
+  }
+
+  const paymentDate =
+    typeof body?.paymentDate === "string" &&
+    body.paymentDate
+      ? new Date(body.paymentDate)
+      : new Date();
+
+  if (Number.isNaN(paymentDate.getTime())) {
+    res.status(400).json({
+      error: "Invalid payment date",
+    });
+    return;
+  }
+
+  const method =
+    typeof body?.method === "string" &&
+    body.method.trim()
+      ? body.method.trim()
+      : undefined;
+
+  const reference =
+    typeof body?.reference === "string" &&
+    body.reference.trim()
+      ? body.reference.trim()
+      : undefined;
+
+  const notes =
+    typeof body?.notes === "string" &&
+    body.notes.trim()
+      ? body.notes.trim()
+      : undefined;
+
+  try {
+    const result = await db.transaction(
+      async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(supplierDebtsTable)
+          .where(
+            eq(
+              supplierDebtsTable.id,
+              id,
+            ),
+          )
+          .for("update");
+
+        if (!existing) {
+          return null;
+        }
+
+        const debtTotal = Number(
+          existing.amount,
+        );
+
+        const alreadyPaid = Number(
+          existing.amountPaid,
+        );
+
+        const remaining =
+          debtTotal - alreadyPaid;
+
+        if (remaining <= 0) {
+          throw new Error(
+            "DEBT_ALREADY_PAID",
+          );
+        }
+
+        if (paymentAmount > remaining) {
+          throw new Error(
+            "PAYMENT_EXCEEDS_BALANCE",
+          );
+        }
+
+        const newPaid =
+          alreadyPaid + paymentAmount;
+
+        const [payment] = await tx
+          .insert(
+            supplierDebtPaymentsTable,
+          )
+          .values({
+            supplierDebtId: id,
+            amount: String(
+              paymentAmount,
+            ),
+            paymentDate,
+            method,
+            reference,
+            notes,
+          })
+          .returning();
+
+        const [updatedDebt] = await tx
+          .update(supplierDebtsTable)
+          .set({
+            amountPaid: String(newPaid),
+          })
+          .where(
+            eq(
+              supplierDebtsTable.id,
+              id,
+            ),
+          )
+          .returning();
+
+        return {
+          debt: updatedDebt,
+          payment,
+        };
+      },
+    );
+
+    if (!result) {
+      res.status(404).json({
+        error: "Not found",
+      });
+      return;
+    }
+
+    res.json({
+      ...mapSupplier(result.debt),
+
+      payment: {
+        ...result.payment,
+        amount: Number(
+          result.payment.amount,
+        ),
+        paymentDate:
+          result.payment.paymentDate.toISOString(),
+        createdAt:
+          result.payment.createdAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message ===
+        "DEBT_ALREADY_PAID"
+    ) {
+      res.status(400).json({
+        error:
+          "This supplier debt is already fully paid",
+      });
+      return;
+    }
+
+    if (
+      error instanceof Error &&
+      error.message ===
+        "PAYMENT_EXCEEDS_BALANCE"
+    ) {
+      res.status(400).json({
+        error:
+          "Payment cannot exceed the remaining supplier balance",
+      });
+      return;
+    }
+
+    throw error;
+  }
+});
+
+router.get("/debts/suppliers/:id/payments", async (req, res): Promise<void> => {
+  const id = parseId(req.params);
+
+  if (!id) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const [debt] = await db
+    .select()
+    .from(supplierDebtsTable)
+    .where(eq(supplierDebtsTable.id, id));
+
+  if (!debt) {
+    res.status(404).json({
+      error: "Supplier debt not found",
+    });
+    return;
+  }
+
+  const payments = await db
+    .select()
+    .from(supplierDebtPaymentsTable)
+    .where(
+      eq(
+        supplierDebtPaymentsTable.supplierDebtId,
+        id,
+      ),
+    )
+    .orderBy(
+      supplierDebtPaymentsTable.paymentDate,
+    );
+
+  res.json(
+    payments.map((payment) => ({
+      ...payment,
+      amount: Number(payment.amount),
+      paymentDate:
+        payment.paymentDate.toISOString(),
+      createdAt:
+        payment.createdAt.toISOString(),
+    })),
+  );
 });
 
 router.delete("/debts/suppliers/:id", async (req, res): Promise<void> => {

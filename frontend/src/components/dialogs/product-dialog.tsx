@@ -41,6 +41,12 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import {
+  getTemplateForCategory,
+  sumSizeQuantities,
+  type SizeQuantity,
+} from "@/lib/category-templates";
+import { cn } from "@/lib/utils";
 
 // Empty locally -> "/api/uploads" goes through the Vite proxy.
 // Production -> points directly to the Render API.
@@ -68,6 +74,31 @@ const formSchema = z.object({
     .number()
     .min(0)
     .optional(),
+
+  // Category-specific product attributes.
+  material: z.string().optional(),
+  color: z.string().optional(),
+  style: z.string().optional(),
+  closureType: z.string().optional(),
+  compartments: z.coerce.number().min(0).optional(),
+  pattern: z.string().optional(),
+  sleeveType: z.string().optional(),
+  fit: z.string().optional(),
+  season: z.string().optional(),
+  shoeType: z.string().optional(),
+
+  // Rich attributes stored inside product.attributes.
+  accessoryType: z.string().optional(),
+  clothingType: z.string().optional(),
+  gender: z.string().optional(),
+  heelType: z.string().optional(),
+  length: z.string().optional(),
+  neckline: z.string().optional(),
+  occasion: z.string().optional(),
+  strapType: z.string().optional(),
+  toeStyle: z.string().optional(),
+  sku: z.string().optional(),
+  barcode: z.string().optional(),
 });
 
 interface ProductDialogProps {
@@ -96,6 +127,16 @@ export function ProductDialog({
   const [isUploading, setIsUploading] =
     useState(false);
 
+  const [colorVariants, setColorVariants] =
+    useState<string[]>([]);
+
+  const [sizeQuantities, setSizeQuantities] =
+    useState<SizeQuantity[]>([]);
+
+  const template = product
+    ? getTemplateForCategory(product.category)
+    : null;
+
   const fileInputRef =
     useRef<HTMLInputElement>(null);
 
@@ -113,8 +154,61 @@ export function ProductDialog({
       expectedSellingPrice: undefined,
       stock: 0,
       lowStockThreshold: 5,
+      material: "",
+      color: "",
+      style: "",
+      closureType: "",
+      compartments: undefined,
+      pattern: "",
+      sleeveType: "",
+      fit: "",
+      season: "",
+      shoeType: "",
+      accessoryType: "",
+      clothingType: "",
+      gender: "",
+      heelType: "",
+      length: "",
+      neckline: "",
+      occasion: "",
+      strapType: "",
+      toeStyle: "",
+      sku: "",
+      barcode: "",
     },
   });
+
+  const readProductAttribute = (
+    key: string,
+  ): string | number | undefined => {
+    if (!product) return undefined;
+
+    const fromAttributes =
+      product.attributes?.[key];
+
+    if (
+      typeof fromAttributes === "string" ||
+      typeof fromAttributes === "number"
+    ) {
+      return fromAttributes;
+    }
+
+    const legacyProduct =
+      product as Product &
+        Record<string, unknown>;
+
+    const legacyValue =
+      legacyProduct[key];
+
+    if (
+      typeof legacyValue === "string" ||
+      typeof legacyValue === "number"
+    ) {
+      return legacyValue;
+    }
+
+    return undefined;
+  };
 
   React.useEffect(() => {
     if (open) {
@@ -134,11 +228,62 @@ export function ProductDialog({
             undefined,
           stock: product.stock,
           lowStockThreshold:
-            product.lowStockThreshold || 5,
+            product.lowStockThreshold ?? 5,
+
+          material:
+            String(readProductAttribute("material") ?? ""),
+          color:
+            String(readProductAttribute("color") ?? ""),
+          style:
+            String(readProductAttribute("style") ?? ""),
+          closureType:
+            String(readProductAttribute("closureType") ?? ""),
+          compartments:
+            typeof readProductAttribute("compartments") === "number"
+              ? Number(readProductAttribute("compartments"))
+              : undefined,
+          pattern:
+            String(readProductAttribute("pattern") ?? ""),
+          sleeveType:
+            String(readProductAttribute("sleeveType") ?? ""),
+          fit:
+            String(readProductAttribute("fit") ?? ""),
+          season:
+            String(readProductAttribute("season") ?? ""),
+          shoeType:
+            String(readProductAttribute("shoeType") ?? ""),
+          accessoryType:
+            String(readProductAttribute("accessoryType") ?? ""),
+          clothingType:
+            String(readProductAttribute("clothingType") ?? ""),
+          gender:
+            String(readProductAttribute("gender") ?? ""),
+          heelType:
+            String(readProductAttribute("heelType") ?? ""),
+          length:
+            String(readProductAttribute("length") ?? ""),
+          neckline:
+            String(readProductAttribute("neckline") ?? ""),
+          occasion:
+            String(readProductAttribute("occasion") ?? ""),
+          strapType:
+            String(readProductAttribute("strapType") ?? ""),
+          toeStyle:
+            String(readProductAttribute("toeStyle") ?? ""),
+          sku: product.sku ?? "",
+          barcode: product.barcode ?? "",
         });
 
         setImagePreview(
           product.imageUrl || "",
+        );
+
+        setColorVariants(
+          product.colorVariants ?? [],
+        );
+
+        setSizeQuantities(
+          product.sizeQuantities ?? [],
         );
       } else {
         form.reset({
@@ -151,9 +296,32 @@ export function ProductDialog({
           expectedSellingPrice: undefined,
           stock: 0,
           lowStockThreshold: 5,
+          material: "",
+          color: "",
+          style: "",
+          closureType: "",
+          compartments: undefined,
+          pattern: "",
+          sleeveType: "",
+          fit: "",
+          season: "",
+          shoeType: "",
+          accessoryType: "",
+          clothingType: "",
+          gender: "",
+          heelType: "",
+          length: "",
+          neckline: "",
+          occasion: "",
+          strapType: "",
+          toeStyle: "",
+          sku: "",
+          barcode: "",
         });
 
         setImagePreview("");
+        setColorVariants([]);
+        setSizeQuantities([]);
       }
     }
   }, [open, product, form]);
@@ -226,18 +394,111 @@ export function ProductDialog({
     }
   };
 
+  const sizeTotal =
+    sumSizeQuantities(sizeQuantities);
+
   const onSubmit = (
     values: z.infer<typeof formSchema>,
   ) => {
+    const attributes: Record<
+      string,
+      string | number
+    > = {
+      ...(product?.attributes ?? {}),
+    };
+
+    if (template) {
+      for (const attr of template.attributes) {
+        const rawValue =
+          values[
+            attr.key as keyof typeof values
+          ];
+
+        if (
+          typeof rawValue === "string"
+        ) {
+          const value = rawValue.trim();
+
+          if (value) {
+            attributes[attr.key] = value;
+          } else {
+            delete attributes[attr.key];
+          }
+        } else if (
+          typeof rawValue === "number" &&
+          Number.isFinite(rawValue)
+        ) {
+          attributes[attr.key] = rawValue;
+        } else {
+          delete attributes[attr.key];
+        }
+      }
+    }
+
     const payload = {
-      ...values,
+      name: values.name,
+      category: values.category,
+      description:
+        values.description || undefined,
       imageUrl:
         values.imageUrl || undefined,
       buyingPrice:
-        values.buyingPrice || undefined,
+        values.buyingPrice ?? undefined,
+      price: values.price,
       expectedSellingPrice:
-        values.expectedSellingPrice ||
+        values.expectedSellingPrice ??
         undefined,
+      stock:
+        template?.stockMode === "sizes"
+          ? sizeTotal
+          : values.stock,
+      lowStockThreshold:
+        values.lowStockThreshold,
+
+      // Keep legacy top-level fields in sync while
+      // Product Details transitions to attributes JSON.
+      material:
+        values.material || undefined,
+      color:
+        values.color || undefined,
+      style:
+        values.style || undefined,
+      closureType:
+        values.closureType || undefined,
+      compartments:
+        values.compartments ?? undefined,
+      pattern:
+        values.pattern || undefined,
+      sleeveType:
+        values.sleeveType || undefined,
+      fit:
+        values.fit || undefined,
+      season:
+        values.season || undefined,
+      shoeType:
+        values.shoeType || undefined,
+
+      colorVariants:
+        template?.hasColorVariants
+          ? colorVariants
+          : undefined,
+
+      sizeQuantities:
+        template?.stockMode === "sizes"
+          ? sizeQuantities
+          : undefined,
+
+      sku:
+        template?.hasSku
+          ? values.sku || undefined
+          : undefined,
+
+      barcode:
+        template?.hasBarcode
+          ? values.barcode || undefined
+          : undefined,
+
+      attributes,
     };
 
     if (product) {
@@ -370,6 +631,157 @@ export function ProductDialog({
                 </FormItem>
               )}
             />
+
+            {product && template && (
+              <div className="space-y-4 rounded-xl border border-border p-4">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Product details
+                  </p>
+
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Tap the values that describe this product.
+                  </p>
+                </div>
+
+                {template.attributes.map((attr) => (
+                  <FormField
+                    key={attr.key}
+                    control={form.control}
+                    name={
+                      attr.key as keyof z.infer<
+                        typeof formSchema
+                      >
+                    }
+                    render={({ field }) => {
+                      const currentValue =
+                        field.value == null
+                          ? ""
+                          : String(field.value);
+
+                      const isPresetValue =
+                        attr.type === "select" &&
+                        attr.options?.some(
+                          (option) =>
+                            option !== "Other" &&
+                            option === currentValue,
+                        );
+
+                      const isCustomValue =
+                        attr.type === "select" &&
+                        attr.allowOther === true &&
+                        currentValue !== "" &&
+                        !isPresetValue;
+
+                      return (
+                        <FormItem className="space-y-2">
+                          <FormLabel>
+                            {attr.label}
+
+                            <span className="ml-1 font-normal text-muted-foreground">
+                              (optional)
+                            </span>
+                          </FormLabel>
+
+                          {attr.type === "select" &&
+                          attr.options ? (
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap gap-2">
+                                {attr.options.map(
+                                  (option) => {
+                                    const isOther =
+                                      option === "Other";
+
+                                    const selected =
+                                      isOther
+                                        ? isCustomValue
+                                        : currentValue ===
+                                          option;
+
+                                    return (
+                                      <button
+                                        key={option}
+                                        type="button"
+                                        onClick={() => {
+                                          if (isOther) {
+                                            field.onChange(
+                                              isCustomValue
+                                                ? ""
+                                                : "Other",
+                                            );
+
+                                            return;
+                                          }
+
+                                          field.onChange(
+                                            selected
+                                              ? ""
+                                              : option,
+                                          );
+                                        }}
+                                        className={cn(
+                                          "min-h-9 rounded-full border px-3 py-2 text-xs font-medium transition-colors",
+                                          selected
+                                            ? "border-primary bg-primary/10 text-primary"
+                                            : "border-border bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                                        )}
+                                      >
+                                        {option}
+                                      </button>
+                                    );
+                                  },
+                                )}
+                              </div>
+
+                                {isCustomValue && (
+                                  <Input
+                                    autoFocus={
+                                      currentValue ===
+                                      "Other"
+                                    }
+                                    value={
+                                      currentValue ===
+                                      "Other"
+                                        ? ""
+                                        : currentValue
+                                    }
+                                    onChange={(event) =>
+                                      field.onChange(
+                                        event.target.value ||
+                                          "Other",
+                                      )
+                                    }
+                                    placeholder={`Enter ${attr.label.toLowerCase()}`}
+                                  />
+                                )}
+                              </div>
+                            ) : (
+                              <FormControl>
+                                <Input
+                                  type={
+                                    attr.type === "number"
+                                      ? "number"
+                                      : "text"
+                                  }
+                                  placeholder={
+                                    attr.placeholder
+                                  }
+                                  {...field}
+                                  value={
+                                    field.value ?? ""
+                                  }
+                                />
+                              </FormControl>
+                            )}
+
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
+                ))}
+              </div>
+            )}
 
             <FormField
               control={form.control}
@@ -611,51 +1023,274 @@ export function ProductDialog({
               </div>
             </div>
 
-            {/* Stock */}
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="stock"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      Stock
-                    </FormLabel>
+            {/* Inventory */}
+            <div className="space-y-5">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Inventory
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Update stock and product references.
+                </p>
+              </div>
 
-                    <FormControl>
-                      <Input
-                        type="number"
-                        {...field}
-                        data-testid="input-product-stock"
-                      />
-                    </FormControl>
+              {/* Color variants */}
+              {template?.hasColorVariants && (
+                <div className="space-y-2">
+                  <label className="text-xs font-medium">
+                    Other available colors
+                  </label>
 
-                    <FormMessage />
-                  </FormItem>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Type a color and press Enter"
+                      onKeyDown={(event) => {
+                        if (
+                          event.key !== "Enter" &&
+                          event.key !== ","
+                        ) {
+                          return;
+                        }
+
+                        event.preventDefault();
+
+                        const input =
+                          event.currentTarget;
+
+                        const value =
+                          input.value.trim();
+
+                        if (
+                          value &&
+                          !colorVariants.includes(value)
+                        ) {
+                          setColorVariants(
+                            (current) => [
+                              ...current,
+                              value,
+                            ],
+                          );
+                        }
+
+                        input.value = "";
+                      }}
+                    />
+                  </div>
+
+                  {colorVariants.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {colorVariants.map(
+                        (color) => (
+                          <span
+                            key={color}
+                            className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs font-medium text-foreground"
+                          >
+                            {color}
+
+                            <button
+                              type="button"
+                              aria-label={`Remove ${color}`}
+                              onClick={() =>
+                                setColorVariants(
+                                  (current) =>
+                                    current.filter(
+                                      (item) =>
+                                        item !== color,
+                                    ),
+                                )
+                              }
+                              className="text-muted-foreground hover:text-destructive"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ),
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Stock */}
+              {template?.stockMode === "sizes" &&
+              template.sizeOptions ? (
+                <div className="space-y-2">
+                  <label className="text-xs font-medium">
+                    Stock by size
+                  </label>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {template.sizeOptions.map(
+                      (size) => {
+                        const quantity =
+                          sizeQuantities.find(
+                            (item) =>
+                              item.size === size,
+                          )?.quantity ?? 0;
+
+                        return (
+                          <div
+                            key={size}
+                            className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5"
+                          >
+                            <span className="w-10 shrink-0 text-sm font-semibold text-foreground">
+                              {size}
+                            </span>
+
+                            <Input
+                              type="number"
+                              min={0}
+                              value={
+                                quantity || ""
+                              }
+                              placeholder="0"
+                              className="h-8"
+                              onChange={(event) => {
+                                const nextQuantity =
+                                  Math.max(
+                                    0,
+                                    parseInt(
+                                      event.target.value,
+                                      10,
+                                    ) || 0,
+                                  );
+
+                                setSizeQuantities(
+                                  (current) => {
+                                    const next =
+                                      current.filter(
+                                        (item) =>
+                                          item.size !==
+                                          size,
+                                      );
+
+                                    if (
+                                      nextQuantity > 0
+                                    ) {
+                                      next.push({
+                                        size,
+                                        quantity:
+                                          nextQuantity,
+                                      });
+                                    }
+
+                                    return next;
+                                  },
+                                );
+                              }}
+                            />
+                          </div>
+                        );
+                      },
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                    <span className="text-xs font-semibold text-primary">
+                      Total stock
+                    </span>
+
+                    <span className="text-sm font-bold text-primary">
+                      {sizeTotal} units
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <FormField
+                  control={form.control}
+                  name="stock"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Stock
+                      </FormLabel>
+
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={0}
+                          {...field}
+                          data-testid="input-product-stock"
+                        />
+                      </FormControl>
+
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {/* Inventory metadata */}
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="lowStockThreshold"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">
+                        Min Stock Alert
+                      </FormLabel>
+
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={0}
+                          {...field}
+                          data-testid="input-product-threshold"
+                        />
+                      </FormControl>
+
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {template?.hasSku && (
+                  <FormField
+                    control={form.control}
+                    name="sku"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">
+                          SKU
+                        </FormLabel>
+
+                        <FormControl>
+                          <Input
+                            placeholder="Reference code"
+                            {...field}
+                          />
+                        </FormControl>
+
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 )}
-              />
 
-              <FormField
-                control={form.control}
-                name="lowStockThreshold"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      Min Stock Alert
-                    </FormLabel>
+                {template?.hasBarcode && (
+                  <FormField
+                    control={form.control}
+                    name="barcode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">
+                          Barcode
+                        </FormLabel>
 
-                    <FormControl>
-                      <Input
-                        type="number"
-                        {...field}
-                        data-testid="input-product-threshold"
-                      />
-                    </FormControl>
+                        <FormControl>
+                          <Input
+                            placeholder="Barcode"
+                            {...field}
+                          />
+                        </FormControl>
 
-                    <FormMessage />
-                  </FormItem>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 )}
-              />
+              </div>
             </div>
 
             <div className="flex justify-end pt-2 gap-2">

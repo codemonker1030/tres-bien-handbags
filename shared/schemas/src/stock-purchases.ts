@@ -1,99 +1,34 @@
 import * as zod from "zod";
 
-// ─── New product ──────────────────────────────────────────────────────────────
+// ─── New lightweight stock groups ─────────────────────────────────────────────
 
 /**
- * Minimum product information required when a completely new
- * catalog product is introduced during procurement.
+ * Broad stock information captured during procurement.
  *
- * The owner can enrich the product later from Inventory.
+ * This intentionally does NOT represent an Inventory product.
+ *
+ * Example:
+ * Handbags -> 20
+ * Shoes    -> 6
  */
-export const NewStockPurchaseProductInput = zod.object({
-  name: zod
-    .string()
-    .trim()
-    .min(1, "Product name is required"),
-
+export const StockPurchaseGroupInput = zod.object({
   category: zod
     .string()
     .trim()
-    .min(1, "Product category is required"),
+    .min(1, "Category is required"),
 
-  /**
-   * Intended/current selling price.
-   * Buying cost is kept on the purchase line because it belongs
-   * to this specific procurement.
-   */
-  price: zod.number().min(0),
-
-  imageUrl: zod
-    .string()
-    .trim()
-    .optional(),
-
-  brand: zod
-    .string()
-    .trim()
-    .optional(),
+  quantity: zod
+    .number()
+    .int()
+    .positive("Quantity must be at least 1"),
 
   description: zod
     .string()
     .trim()
     .optional(),
-
-  lowStockThreshold: zod
-    .number()
-    .int()
-    .min(0)
-    .optional(),
 });
 
-// ─── Purchase item variants ───────────────────────────────────────────────────
-
-export const ExistingStockPurchaseItemInput = zod.object({
-  type: zod.literal("existing"),
-
-  productId: zod
-    .number()
-    .int()
-    .positive(),
-
-  quantity: zod
-    .number()
-    .int()
-    .positive(),
-
-  unitBuyingPrice: zod
-    .number()
-    .min(0),
-});
-
-export const NewStockPurchaseItemInput = zod.object({
-  type: zod.literal("new"),
-
-  product: NewStockPurchaseProductInput,
-
-  quantity: zod
-    .number()
-    .int()
-    .positive(),
-
-  unitBuyingPrice: zod
-    .number()
-    .min(0),
-});
-
-/**
- * A procurement line can either replenish an existing catalog
- * product or create a completely new product.
- */
-export const StockPurchaseItemInput =
-  zod.discriminatedUnion("type", [
-    ExistingStockPurchaseItemInput,
-    NewStockPurchaseItemInput,
-  ]);
-
-// ─── Shared purchase costs ────────────────────────────────────────────────────
+// ─── Additional procurement costs ─────────────────────────────────────────────
 
 export const StockPurchaseCostInput = zod.object({
   label: zod
@@ -103,7 +38,7 @@ export const StockPurchaseCostInput = zod.object({
 
   amount: zod
     .number()
-    .min(0),
+    .positive("Cost amount must be greater than 0"),
 });
 
 // ─── Create purchase ──────────────────────────────────────────────────────────
@@ -121,37 +56,63 @@ export const CreateStockPurchaseBody = zod
       .optional(),
 
     /**
-     * ISO date/datetime string from the frontend.
-     * Example: 2026-09-14
+     * Business date of the purchase.
+     *
+     * Usually defaults to today in the frontend, but can be changed
+     * when the owner records an earlier purchase later.
      */
     purchaseDate: zod
       .string()
-      .min(1),
-
-    items: zod
-      .array(StockPurchaseItemInput)
-      .min(
-        1,
-        "At least one product is required",
-      ),
+      .min(1, "Purchase date is required"),
 
     /**
-     * Flexible direct procurement costs:
-     * transport, packaging, handling, etc.
+     * Lightweight description of what came into the business.
+     *
+     * Example:
+     * [
+     *   { category: "Handbags", quantity: 20 },
+     *   { category: "Shoes", quantity: 6 }
+     * ]
+     *
+     * These DO NOT create or update Inventory products.
+     */
+    stockGroups: zod
+      .array(StockPurchaseGroupInput)
+      .min(1, "Add at least one stock group"),
+
+    /**
+     * Total supplier cost of the stock itself.
+     *
+     * Entered once for the entire procurement.
+     */
+    goodsTotal: zod
+      .number()
+      .positive("Stock cost must be greater than 0"),
+
+    /**
+     * Optional additional direct procurement costs:
+     * transport, packaging, loading, delivery, etc.
      */
     sharedCosts: zod
       .array(StockPurchaseCostInput)
       .default([]),
 
     /**
-     * Cash actually paid toward this procurement.
+     * Amount actually paid toward the complete procurement.
      *
-     * It may be lower than the final procurement total,
-     * in which case the backend creates supplier debt.
+     * If lower than totalCost, the backend creates supplier debt.
      */
     amountPaid: zod
       .number()
-      .min(0),
+      .min(0, "Amount paid cannot be negative"),
+
+    /**
+     * Optional invoice, receipt, M-Pesa or supplier reference.
+     */
+    reference: zod
+      .string()
+      .trim()
+      .optional(),
 
     notes: zod
       .string()
@@ -159,75 +120,71 @@ export const CreateStockPurchaseBody = zod
       .optional(),
   })
   .superRefine((data, ctx) => {
-    const goodsTotal =
-      data.items.reduce(
-        (sum, item) =>
-          sum +
-          item.quantity *
-            item.unitBuyingPrice,
-        0,
-      );
-
     const sharedCostsTotal =
       data.sharedCosts.reduce(
-        (sum, cost) =>
-          sum + cost.amount,
+        (sum, cost) => sum + cost.amount,
         0,
       );
 
     const totalCost =
-      goodsTotal + sharedCostsTotal;
+      data.goodsTotal + sharedCostsTotal;
 
     if (data.amountPaid > totalCost) {
       ctx.addIssue({
         code: zod.ZodIssueCode.custom,
         path: ["amountPaid"],
         message:
-          "Amount paid cannot exceed the total procurement cost",
-      });
-    }
-
-    /**
-     * Prevent the same existing product from being entered twice
-     * in one procurement. The owner should change its quantity
-     * instead.
-     *
-     * New products are intentionally excluded because they do not
-     * have database IDs yet.
-     */
-    const existingProductIds =
-      data.items
-        .filter(
-          (
-            item,
-          ): item is zod.infer<
-            typeof ExistingStockPurchaseItemInput
-          > => item.type === "existing",
-        )
-        .map(
-          (item) => item.productId,
-        );
-
-    const duplicateExistingProduct =
-      existingProductIds.find(
-        (productId, index) =>
-          existingProductIds.indexOf(
-            productId,
-          ) !== index,
-      );
-
-    if (
-      duplicateExistingProduct !==
-      undefined
-    ) {
-      ctx.addIssue({
-        code: zod.ZodIssueCode.custom,
-        path: ["items"],
-        message:
-          "The same existing product cannot appear more than once in a stock purchase",
+          "Amount paid cannot exceed the total purchase cost",
       });
     }
   });
+
+// ─── Update purchase ─────────────────────────────────────────────────────────
+
+/**
+ * Editable procurement details.
+ *
+ * amountPaid is deliberately excluded.
+ * Payments are financial events and must be recorded through the
+ * supplier-debt payment workflow so payment history remains accurate.
+ */
+export const UpdateStockPurchaseBody = zod.object({
+  supplierName: zod
+    .string()
+    .trim()
+    .min(1, "Supplier name is required"),
+
+  supplierPhone: zod
+    .string()
+    .trim()
+    .optional(),
+
+  purchaseDate: zod
+    .string()
+    .min(1, "Purchase date is required"),
+
+  stockGroups: zod
+    .array(StockPurchaseGroupInput)
+    .min(1, "Add at least one stock group"),
+
+  goodsTotal: zod
+    .number()
+    .positive("Stock cost must be greater than 0"),
+
+  sharedCosts: zod
+    .array(StockPurchaseCostInput)
+    .default([]),
+
+  reference: zod
+    .string()
+    .trim()
+    .optional(),
+
+  notes: zod
+    .string()
+    .trim()
+    .optional(),
+});
 
 // ─── Route params ─────────────────────────────────────────────────────────────
 
@@ -239,21 +196,53 @@ export const GetStockPurchaseParams =
       .positive(),
   });
 
-// ─── Response schemas ─────────────────────────────────────────────────────────
+// ─── Response: additional cost ────────────────────────────────────────────────
 
 export const StockPurchaseCostResponse =
   zod.object({
     id: zod.number(),
+
     purchaseId: zod.number(),
+
     label: zod.string(),
+
     amount: zod.number(),
+
     createdAt: zod.string(),
   });
 
-export const StockPurchaseItemResponse =
+// ─── Response: new lightweight stock group ────────────────────────────────────
+
+export const StockPurchaseGroupResponse =
   zod.object({
     id: zod.number(),
+
     purchaseId: zod.number(),
+
+    category: zod.string(),
+
+    quantity: zod.number(),
+
+    description: zod
+      .string()
+      .nullish(),
+
+    createdAt: zod.string(),
+  });
+
+// ─── Legacy product-level purchase item ───────────────────────────────────────
+//
+// Existing purchases may contain these because Tres Bien originally linked
+// procurement directly to Inventory.
+//
+// New purchases will NOT create these records.
+
+export const StockPurchaseLegacyItemResponse =
+  zod.object({
+    id: zod.number(),
+
+    purchaseId: zod.number(),
+
     productId: zod.number(),
 
     productName: zod
@@ -266,8 +255,7 @@ export const StockPurchaseItemResponse =
 
     goodsSubtotal: zod.number(),
 
-    allocatedSharedCost:
-      zod.number(),
+    allocatedSharedCost: zod.number(),
 
     landedSubtotal: zod.number(),
 
@@ -276,9 +264,21 @@ export const StockPurchaseItemResponse =
     createdAt: zod.string(),
   });
 
+// ─── Main purchase response ───────────────────────────────────────────────────
+
 export const StockPurchaseResponse =
   zod.object({
     id: zod.number(),
+
+    /**
+     * New purchases receive values such as PUR-2026-0002.
+     *
+     * Nullable temporarily because historical records created before
+     * this system may not yet have a purchase number.
+     */
+    purchaseNumber: zod
+      .string()
+      .nullish(),
 
     supplierName: zod.string(),
 
@@ -288,19 +288,39 @@ export const StockPurchaseResponse =
 
     purchaseDate: zod.string(),
 
+    /**
+     * Sum of stockGroups.quantity.
+     */
+    totalQuantity: zod.number(),
+
     goodsTotal: zod.number(),
 
-    sharedCostsTotal:
-      zod.number(),
+    sharedCostsTotal: zod.number(),
 
     totalCost: zod.number(),
 
     amountPaid: zod.number(),
 
+    /**
+     * Current remaining balance.
+     *
+     * When linked supplier debt exists, the backend can derive this
+     * from that debt so later repayments are reflected here.
+     */
     supplierBalance: zod.number(),
+
+    paymentStatus: zod.enum([
+      "paid",
+      "partially_paid",
+      "unpaid",
+    ]),
 
     supplierDebtId: zod
       .number()
+      .nullish(),
+
+    reference: zod
+      .string()
       .nullish(),
 
     notes: zod
@@ -311,14 +331,28 @@ export const StockPurchaseResponse =
 
     updatedAt: zod.string(),
 
-    items: zod.array(
-      StockPurchaseItemResponse,
+    /**
+     * New procurement model.
+     */
+    stockGroups: zod.array(
+      StockPurchaseGroupResponse,
     ),
 
     sharedCosts: zod.array(
       StockPurchaseCostResponse,
     ),
+
+    /**
+     * Historical product-level data.
+     *
+     * Normally [] for purchases created using the new workflow.
+     */
+    legacyItems: zod.array(
+      StockPurchaseLegacyItemResponse,
+    ),
   });
+
+// ─── List response ─────────────────────────────────────────────────────────────
 
 export const ListStockPurchasesResponse =
   zod.array(

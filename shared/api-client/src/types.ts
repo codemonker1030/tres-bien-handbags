@@ -98,6 +98,13 @@ export interface Product {
   /** @nullable */
   sizeQuantities?: SizeQuantity[] | null;
 
+  /**
+   * Flexible category-specific product attributes.
+   * Examples: strapType, occasion, neckline, heelType, toeStyle.
+   */
+  /** @nullable */
+  attributes?: Record<string, string | number> | null;
+
   createdAt: string;
   updatedAt: string;
 }
@@ -133,6 +140,7 @@ export interface ProductInput {
   season?: string;
   shoeType?: string;
   sizeQuantities?: SizeQuantity[];
+  attributes?: Record<string, string | number>;
 }
 
 export interface ProductUpdate {
@@ -166,6 +174,7 @@ export interface ProductUpdate {
   season?: string;
   shoeType?: string;
   sizeQuantities?: SizeQuantity[];
+  attributes?: Record<string, string | number>;
 }
 
 // ─── Sales ───────────────────────────────────────────────────────────────────

@@ -58,6 +58,18 @@ export const productsTable = pgTable("products", {
   // Per-size stock for dresses/shoes: [{ size: "M", quantity: 4 }, ...].
   // `stock` above is kept in sync as the sum of these at save time.
   sizeQuantities: jsonb("size_quantities").$type<{ size: string; quantity: number }[]>(),
+
+  // Flexible category-specific product characteristics.
+  //
+  // Examples:
+  // handbags: { material: "Leather", style: "Tote" }
+  // dresses:  { pattern: "Floral", sleeveType: "Short Sleeve" }
+  // shoes:    { shoeType: "Sneakers", closureType: "Lace-up" }
+  //
+  // Category templates define which attributes are collected.
+  // Keeping these in JSONB means new categories/attributes do not
+  // require a new database column every time.
+  attributes: jsonb("attributes").$type<Record<string, string | number>>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -508,10 +508,11 @@ export function DebtDialog({
 }
 
 // ─── Record Payment dialog ────────────────────────────────────────────────────
+
 const paySchema = z.object({
   amountPaid: z.coerce
     .number()
-    .min(0),
+    .positive("Payment must be greater than 0"),
 });
 
 interface PaymentDialogProps {
@@ -550,22 +551,61 @@ export function RecordPaymentDialog({
   });
 
   useEffect(() => {
-    if (open && debt) {
-      form.reset({
-        amountPaid:
-          debt.amountPaid,
-      });
-    }
-  }, [open, debt, form]);
+    if (!open || !debt) return;
+
+    form.reset({
+      // Customer endpoint still expects the cumulative amount paid.
+      // Supplier endpoint now expects only the payment being made now.
+      amountPaid:
+        kind === "customer"
+          ? debt.amountPaid
+          : 0,
+    });
+  }, [open, debt, kind, form]);
 
   if (!debt) {
     return null;
   }
 
+  const currentRemaining = Math.max(
+    0,
+    debt.remaining,
+  );
+
+  const enteredAmount = Number(
+    form.watch("amountPaid") || 0,
+  );
+
+  const newRemaining =
+    kind === "supplier"
+      ? Math.max(
+          0,
+          currentRemaining -
+            enteredAmount,
+        )
+      : Math.max(
+          0,
+          debt.amount -
+            enteredAmount,
+        );
+
   const onSubmit = async (values: {
     amountPaid: number;
   }) => {
     try {
+      if (
+        kind === "supplier" &&
+        values.amountPaid >
+          currentRemaining
+      ) {
+        form.setError("amountPaid", {
+          type: "manual",
+          message:
+            "Payment cannot exceed the remaining balance",
+        });
+        return;
+      }
+
       await apiPatch(
         `${path}/${debt.id}/payment`,
         {
@@ -582,59 +622,86 @@ export function RecordPaymentDialog({
         queryKey,
       });
 
+      // A supplier debt may belong to a purchase.
+      // Refresh purchase data so its balance/status changes immediately.
+      if (kind === "supplier") {
+        qc.invalidateQueries({
+          queryKey: [
+            "/api/stock-purchases",
+          ],
+        });
+      }
+
       onOpenChange(false);
-    } catch {
+    } catch (error) {
       toast({
         title:
           "Failed to record payment",
+        description:
+          error instanceof Error
+            ? error.message
+            : undefined,
         variant: "destructive",
       });
     }
   };
-
-  const newRemaining = Math.max(
-    0,
-    debt.amount -
-      Number(
-        form.watch("amountPaid") ||
-          0,
-      ),
-  );
 
   return (
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
     >
-      <DialogContent className="sm:max-w-[360px]">
+      <DialogContent className="sm:max-w-[380px]">
         <DialogHeader>
           <DialogTitle>
             Record Payment
           </DialogTitle>
 
           <DialogDescription>
-            Update how much has been
-            paid on this debt.
+            {kind === "supplier"
+              ? "Record money you are paying to this supplier now."
+              : "Update how much the customer has paid on this debt."}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="text-sm space-y-0.5 py-1">
-          <p className="font-medium text-foreground">
+        <div className="rounded-xl border border-border bg-muted/20 p-3">
+          <p className="text-sm font-medium text-foreground">
             {debt.name}
           </p>
 
-          <p className="text-muted-foreground text-xs">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {debt.description}
           </p>
 
-          <p className="text-xs text-muted-foreground">
-            Total:{" "}
-            <span className="font-medium text-foreground">
-              {formatCurrency(
-                debt.amount,
-              )}
-            </span>
-          </p>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-[10px] text-muted-foreground">
+                Total debt
+              </p>
+
+              <p className="text-sm font-semibold tabular-nums">
+                {formatCurrency(
+                  debt.amount,
+                )}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-[10px] text-muted-foreground">
+                {kind === "supplier"
+                  ? "Still owed"
+                  : "Already paid"}
+              </p>
+
+              <p className="text-sm font-semibold tabular-nums">
+                {formatCurrency(
+                  kind === "supplier"
+                    ? currentRemaining
+                    : debt.amountPaid,
+                )}
+              </p>
+            </div>
+          </div>
         </div>
 
         <Form {...form}>
@@ -650,16 +717,30 @@ export function RecordPaymentDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>
-                    Total Amount Paid So
-                    Far (KSh)
+                    {kind === "supplier"
+                      ? "Payment Amount (KSh)"
+                      : "Total Amount Paid So Far (KSh)"}
                   </FormLabel>
 
                   <FormControl>
                     <Input
                       type="number"
-                      min="0"
-                      max={debt.amount}
+                      min={
+                        kind === "supplier"
+                          ? "0.01"
+                          : "0"
+                      }
+                      max={
+                        kind === "supplier"
+                          ? currentRemaining
+                          : debt.amount
+                      }
                       step="0.01"
+                      placeholder={
+                        kind === "supplier"
+                          ? "Enter amount paid now"
+                          : undefined
+                      }
                       {...field}
                     />
                   </FormControl>
@@ -669,23 +750,32 @@ export function RecordPaymentDialog({
               )}
             />
 
-            <p className="text-xs text-muted-foreground">
-              Still remaining:{" "}
-              <span
-                className={
-                  newRemaining === 0
-                    ? "text-primary font-semibold"
-                    : "font-semibold text-foreground"
-                }
-              >
-                {formatCurrency(
-                  newRemaining,
-                )}
-              </span>
+            <div className="rounded-lg bg-muted/40 px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3 text-xs">
+                <span className="text-muted-foreground">
+                  Balance after payment
+                </span>
+
+                <span
+                  className={
+                    newRemaining === 0
+                      ? "font-semibold text-primary"
+                      : "font-semibold text-foreground"
+                  }
+                >
+                  {formatCurrency(
+                    newRemaining,
+                  )}
+                </span>
+              </div>
 
               {newRemaining === 0 &&
-                " — fully settled 🎉"}
-            </p>
+                enteredAmount > 0 && (
+                  <p className="mt-1 text-[10px] font-medium text-primary">
+                    This debt will be fully settled.
+                  </p>
+                )}
+            </div>
 
             <div className="flex justify-end gap-2">
               <Button
@@ -707,8 +797,8 @@ export function RecordPaymentDialog({
               >
                 {form.formState
                   .isSubmitting
-                  ? "Saving…"
-                  : "Save Payment"}
+                  ? "Recording…"
+                  : "Record Payment"}
               </Button>
             </div>
           </form>

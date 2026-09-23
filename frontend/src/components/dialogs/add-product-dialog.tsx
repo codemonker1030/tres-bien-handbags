@@ -25,25 +25,33 @@ import { cn } from "@/lib/utils";
 // ─── step plan — varies by category, since not every template needs a
 // dedicated Variants step (accessories has neither color variants nor
 // per-size stock) ──────────────────────────────────────────────────────────
-type StepKey = "category" | "basics" | "attributes" | "variants" | "inventory" | "images" | "review";
+type StepKey =
+  | "category"
+  | "images"
+  | "details"
+  | "inventory"
+  | "review";
 
 const STEP_META: Record<StepKey, string> = {
   category: "Category",
-  basics: "Basics",
-  attributes: "Attributes",
-  variants: "Variants",
-  inventory: "Inventory",
   images: "Photos",
+  details: "Details",
+  inventory: "Stock & Pricing",
   review: "Review",
 };
 
-function buildSteps(template: CategoryTemplate | null): StepKey[] {
-  const steps: StepKey[] = ["category"];
-  if (!template) return steps;
-  steps.push("basics", "attributes");
-  if (template.hasColorVariants || template.stockMode === "sizes") steps.push("variants");
-  steps.push("inventory", "images", "review");
-  return steps;
+function buildSteps(
+  template: CategoryTemplate | null,
+): StepKey[] {
+  if (!template) return ["category"];
+
+  return [
+    "category",
+    "images",
+    "details",
+    "inventory",
+    "review",
+  ];
 }
 
 // ─── form schema — a superset of every template's fields; each template
@@ -52,6 +60,9 @@ const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   brand: z.string().optional(),
   description: z.string().optional(),
+  buyingPrice: z.coerce
+    .number()
+    .min(0, "Buying price cannot be negative"),
   price: z.coerce.number().min(0.01, "Selling price is required"),
   material: z.string().optional(),
   color: z.string().optional(),
@@ -63,6 +74,18 @@ const formSchema = z.object({
   fit: z.string().optional(),
   season: z.string().optional(),
   shoeType: z.string().optional(),
+
+  // New category-specific attributes.
+  accessoryType: z.string().optional(),
+  clothingType: z.string().optional(),
+  gender: z.string().optional(),
+  heelType: z.string().optional(),
+  length: z.string().optional(),
+  neckline: z.string().optional(),
+  occasion: z.string().optional(),
+  strapType: z.string().optional(),
+  toeStyle: z.string().optional(),
+
   stock: z.coerce.number().min(0).optional(),
   lowStockThreshold: z.coerce.number().min(0).optional(),
   sku: z.string().optional(),
@@ -72,9 +95,12 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const defaultValues: FormValues = {
-  name: "", brand: "", description: "", price: 0,
+  name: "", brand: "", description: "",
+  buyingPrice: 0, price: 0,
   material: "", color: "", style: "", closureType: "", compartments: undefined,
   pattern: "", sleeveType: "", fit: "", season: "", shoeType: "",
+  accessoryType: "", clothingType: "", gender: "", heelType: "",
+  length: "", neckline: "", occasion: "", strapType: "", toeStyle: "",
   stock: 0, lowStockThreshold: 5, sku: "", barcode: "",
 };
 
@@ -372,14 +398,25 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  const buyingPrice = form.watch("buyingPrice");
   const price = form.watch("price");
   const flatStock = form.watch("stock");
   const stillUploading = images.some((i) => i.uploading);
   const sizeTotal = sumSizeQuantities(sizeQuantities);
 
-  const stepFieldsFor = (key: StepKey): (keyof FormValues)[] => {
-    if (key === "basics") return ["name", "price"];
-    if (key === "inventory" && template?.stockMode === "quantity") return ["stock"];
+  const stepFieldsFor = (
+    key: StepKey,
+  ): (keyof FormValues)[] => {
+    if (key === "details") {
+      return ["name"];
+    }
+
+    if (key === "inventory") {
+      return template?.stockMode === "quantity"
+        ? ["stock", "buyingPrice", "price"]
+        : ["buyingPrice", "price"];
+    }
+
     return [];
   };
 
@@ -396,11 +433,43 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
     const uploadedUrls = images.filter((i) => i.uploadedUrl).map((i) => i.uploadedUrl!);
     const finalStock = template.stockMode === "sizes" ? sizeTotal : (values.stock ?? 0);
 
+    /**
+     * Category-specific product characteristics.
+     *
+     * The category template is the source of truth: whenever a new
+     * attribute is added to a template, it is automatically persisted
+     * here without adding another payload mapping.
+     */
+    const attributes = Object.fromEntries(
+      template.attributes
+        .map((attribute) => {
+          const value =
+            values[
+              attribute.key as keyof FormValues
+            ];
+
+          return [
+            attribute.key,
+            value,
+          ] as const;
+        })
+        .filter((entry) => {
+          const value = entry[1];
+
+          return (
+            value !== undefined &&
+            value !== null &&
+            value !== ""
+          );
+        }),
+    ) as Record<string, string | number>;
+
     const payload = {
       name: values.name,
       category: template.label,
       brand: values.brand || undefined,
       description: values.description || undefined,
+      buyingPrice: values.buyingPrice,
       price: values.price,
       stock: finalStock,
       lowStockThreshold: values.lowStockThreshold,
@@ -408,6 +477,15 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
       barcode: template.hasBarcode ? (values.barcode || undefined) : undefined,
       imageUrl: uploadedUrls[0] || undefined,
       images: uploadedUrls.length > 0 ? uploadedUrls : undefined,
+
+      // Flexible canonical category attributes.
+      attributes:
+        Object.keys(attributes).length > 0
+          ? attributes
+          : undefined,
+
+      // Legacy columns retained temporarily for compatibility with
+      // existing Product Details / filtering code.
       material: values.material || undefined,
       color: values.color || undefined,
       style: values.style || undefined,
@@ -469,147 +547,508 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
               </div>
             )}
 
-            {/* ── Basics ── */}
-            {currentStep === "basics" && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-200">
-                <FormField control={form.control} name="name" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Product Name</FormLabel>
-                    <FormControl><Input placeholder="e.g. Leather Tote Bag" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="brand" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Brand <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
-                    <FormControl><Input placeholder="e.g. Michael Kors" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="price" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Selling Price (KSh)</FormLabel>
-                    <FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="description" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
-                    <FormControl><Textarea placeholder="Details a customer would want to know..." rows={3} {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
+            {/* ── Photos ── */}
+            {currentStep === "images" && (
+              <div className="animate-in fade-in slide-in-from-right-2 duration-200">
+                <ImageStep
+                  images={images}
+                  setImages={setImages}
+                />
+
+                <p className="mt-2 text-center text-xs text-muted-foreground">
+                  Add the product photo first so the
+                  details are easier to describe.
+                  You can add more photos later.
+                </p>
               </div>
             )}
 
-            {/* ── Attributes (dynamic per template) ── */}
-            {currentStep === "attributes" && template && (
+            {/* ── Details ── */}
+            {currentStep === "details" && template && (
               <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-200">
+                {images[0]?.previewUrl && (
+                  <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/20 p-2.5">
+                    <img
+                      src={images[0].previewUrl}
+                      alt=""
+                      className="h-14 w-14 shrink-0 rounded-lg object-cover"
+                    />
+
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-foreground">
+                        Describe what you see
+                      </p>
+
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        Keep the product details short and useful.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Product name</FormLabel>
+
+                      <FormControl>
+                        <Input
+                          placeholder="e.g. Leather Tote Bag"
+                          {...field}
+                        />
+                      </FormControl>
+
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="brand"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Brand{" "}
+                        <span className="font-normal text-muted-foreground">
+                          (optional)
+                        </span>
+                      </FormLabel>
+
+                      <FormControl>
+                        <Input
+                          placeholder="e.g. Michael Kors"
+                          {...field}
+                        />
+                      </FormControl>
+
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 {template.attributes.map((attr) => (
                   <FormField
                     key={attr.key}
                     control={form.control}
                     name={attr.key as keyof FormValues}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{attr.label}</FormLabel>
-                        <FormControl>
-                          <Input
-                            type={attr.type === "number" ? "number" : "text"}
-                            placeholder={attr.placeholder}
-                            {...field}
-                            value={field.value ?? ""}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    render={({ field }) => {
+                      const currentValue =
+                        field.value == null
+                          ? ""
+                          : String(field.value);
+
+                      const isPresetValue =
+                        attr.type === "select" &&
+                        attr.options?.some(
+                          (option) =>
+                            option !== "Other" &&
+                            option === currentValue,
+                        );
+
+                      const isCustomValue =
+                        attr.type === "select" &&
+                        attr.allowOther === true &&
+                        currentValue !== "" &&
+                        !isPresetValue;
+
+                      return (
+                        <FormItem className="space-y-2">
+                          <FormLabel>
+                            {attr.label}
+
+                            <span className="ml-1 font-normal text-muted-foreground">
+                              (optional)
+                            </span>
+                          </FormLabel>
+
+                          {attr.type === "select" &&
+                          attr.options ? (
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap gap-2">
+                                {attr.options.map(
+                                  (option) => {
+                                    const isOther =
+                                      option === "Other";
+
+                                    const selected =
+                                      isOther
+                                        ? isCustomValue
+                                        : currentValue ===
+                                          option;
+
+                                    return (
+                                      <button
+                                        key={option}
+                                        type="button"
+                                        onClick={() => {
+                                          if (isOther) {
+                                            field.onChange(
+                                              isCustomValue
+                                                ? ""
+                                                : "Other",
+                                            );
+
+                                            return;
+                                          }
+
+                                          field.onChange(
+                                            selected
+                                              ? ""
+                                              : option,
+                                          );
+                                        }}
+                                        className={cn(
+                                          "min-h-9 rounded-full border px-3 py-2 text-xs font-medium transition-colors",
+                                          selected
+                                            ? "border-primary bg-primary/10 text-primary"
+                                            : "border-border bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                                        )}
+                                      >
+                                        {option}
+                                      </button>
+                                    );
+                                  },
+                                )}
+                              </div>
+
+                              {isCustomValue && (
+                                <Input
+                                  autoFocus={
+                                    currentValue ===
+                                    "Other"
+                                  }
+                                  value={
+                                    currentValue ===
+                                    "Other"
+                                      ? ""
+                                      : currentValue
+                                  }
+                                  onChange={(event) =>
+                                    field.onChange(
+                                      event.target.value ||
+                                        "Other",
+                                    )
+                                  }
+                                  placeholder={`Enter ${attr.label.toLowerCase()}`}
+                                />
+                              )}
+                            </div>
+                          ) : (
+                            <FormControl>
+                              <Input
+                                type={
+                                  attr.type === "number"
+                                    ? "number"
+                                    : "text"
+                                }
+                                placeholder={
+                                  attr.placeholder
+                                }
+                                {...field}
+                                value={
+                                  field.value ?? ""
+                                }
+                              />
+                            </FormControl>
+                          )}
+
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
                   />
                 ))}
-              </div>
-            )}
 
-            {/* ── Variants (color variants OR size×quantity, per template) ── */}
-            {currentStep === "variants" && template && (
-              <div className="space-y-2 animate-in fade-in slide-in-from-right-2 duration-200">
-                {template.hasColorVariants && (
-                  <div>
-                    <label className="text-sm font-medium leading-none">
-                      Color Variants <span className="text-muted-foreground font-normal">(optional)</span>
-                    </label>
-                    <p className="text-xs text-muted-foreground mt-1 mb-2">Other colors this item is also available in.</p>
-                    <TagListInput value={colorVariants} onChange={setColorVariants} placeholder="e.g. Black — press Enter to add" />
-                  </div>
-                )}
-                {template.stockMode === "sizes" && template.sizeOptions && (
-                  <div>
-                    <label className="text-sm font-medium leading-none">Sizes & Quantity</label>
-                    <p className="text-xs text-muted-foreground mt-1 mb-2">Enter how many of each size you have — total stock is calculated automatically.</p>
-                    <SizeQuantityTable sizeOptions={template.sizeOptions} value={sizeQuantities} onChange={setSizeQuantities} />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Inventory ── */}
-            {currentStep === "inventory" && template && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-200">
-                <div className="grid grid-cols-2 gap-3">
-                  {template.stockMode === "quantity" && (
-                    <FormField control={form.control} name="stock" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Quantity</FormLabel>
-                        <FormControl><Input type="number" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                  )}
-                  <FormField control={form.control} name="lowStockThreshold" render={({ field }) => (
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Low Stock Alert</FormLabel>
-                      <FormControl><Input type="number" {...field} /></FormControl>
+                      <FormLabel>
+                        Description{" "}
+                        <span className="font-normal text-muted-foreground">
+                          (optional)
+                        </span>
+                      </FormLabel>
+
+                      <FormControl>
+                        <Textarea
+                          placeholder="Anything useful a customer should know..."
+                          rows={3}
+                          {...field}
+                        />
+                      </FormControl>
+
                       <FormMessage />
                     </FormItem>
-                  )} />
-                </div>
-                {(template.hasSku || template.hasBarcode) && (
-                  <div className="grid grid-cols-2 gap-3">
-                    {template.hasSku && (
-                      <FormField control={form.control} name="sku" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">SKU <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
-                          <FormControl><Input placeholder="Your own reference code" {...field} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
-                    )}
-                    {template.hasBarcode && (
-                      <FormField control={form.control} name="barcode" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">Barcode <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
-                          <FormControl><Input placeholder="If it has one" {...field} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
-                    )}
-                  </div>
-                )}
-                {template.stockMode === "sizes" && (
-                  <p className="text-xs text-muted-foreground">
-                    Quantity comes from the sizes you entered on the previous step ({sizeTotal} units total).
-                  </p>
-                )}
+                  )}
+                />
               </div>
             )}
 
-            {/* ── Photos ── */}
-            {currentStep === "images" && (
-              <div className="animate-in fade-in slide-in-from-right-2 duration-200">
-                <ImageStep images={images} setImages={setImages} />
-                <p className="text-xs text-center text-muted-foreground mt-2">
-                  Photos are optional here — you can always add them later.
-                </p>
+            {/* ── Stock & Pricing ── */}
+            {currentStep === "inventory" && template && (
+              <div className="space-y-5 animate-in fade-in slide-in-from-right-2 duration-200">
+                <section className="space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold">
+                      Pricing
+                    </h3>
+
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Enter the cost and selling price
+                      for one item.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name="buyingPrice"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            Buying price
+                          </FormLabel>
+
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              placeholder="0.00"
+                              {...field}
+                            />
+                          </FormControl>
+
+                          <p className="text-[10px] text-muted-foreground">
+                            Per item
+                          </p>
+
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="price"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            Selling price
+                          </FormLabel>
+
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              placeholder="0.00"
+                              {...field}
+                            />
+                          </FormControl>
+
+                          <p className="text-[10px] text-muted-foreground">
+                            Per item
+                          </p>
+
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {buyingPrice > 0 &&
+                    price > 0 && (
+                    <div className="flex items-center justify-between rounded-xl bg-muted/50 px-3 py-2.5 text-xs">
+                      <span className="text-muted-foreground">
+                        Profit per item
+                      </span>
+
+                      <span className="font-semibold tabular-nums text-foreground">
+                        {formatCurrency(
+                          price - buyingPrice,
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </section>
+
+                {(template.hasColorVariants ||
+                  template.stockMode === "sizes") && (
+                  <section className="space-y-3 border-t border-border pt-4">
+                    {template.hasColorVariants && (
+                      <div>
+                        <label className="text-sm font-medium leading-none">
+                          Color variants{" "}
+                          <span className="font-normal text-muted-foreground">
+                            (optional)
+                          </span>
+                        </label>
+
+                        <p className="mb-2 mt-1 text-xs text-muted-foreground">
+                          Other colors this item is
+                          available in.
+                        </p>
+
+                        <TagListInput
+                          value={colorVariants}
+                          onChange={setColorVariants}
+                          placeholder="e.g. Black — press Enter to add"
+                        />
+                      </div>
+                    )}
+
+                    {template.stockMode === "sizes" &&
+                      template.sizeOptions && (
+                        <div>
+                          <label className="text-sm font-medium leading-none">
+                            Sizes & quantity
+                          </label>
+
+                          <p className="mb-2 mt-1 text-xs text-muted-foreground">
+                            Enter how many of each size
+                            you have.
+                          </p>
+
+                          <SizeQuantityTable
+                            sizeOptions={
+                              template.sizeOptions
+                            }
+                            value={sizeQuantities}
+                            onChange={
+                              setSizeQuantities
+                            }
+                          />
+                        </div>
+                      )}
+                  </section>
+                )}
+
+                <section className="space-y-3 border-t border-border pt-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    {template.stockMode ===
+                      "quantity" && (
+                      <FormField
+                        control={form.control}
+                        name="stock"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              Quantity
+                            </FormLabel>
+
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={0}
+                                {...field}
+                              />
+                            </FormControl>
+
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    <FormField
+                      control={form.control}
+                      name="lowStockThreshold"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            Low stock alert
+                          </FormLabel>
+
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0}
+                              {...field}
+                            />
+                          </FormControl>
+
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {template.stockMode ===
+                    "sizes" && (
+                    <div className="rounded-xl bg-muted/40 px-3 py-2.5 text-xs">
+                      <span className="text-muted-foreground">
+                        Total quantity
+                      </span>
+
+                      <span className="ml-2 font-semibold tabular-nums">
+                        {sizeTotal} units
+                      </span>
+                    </div>
+                  )}
+
+                  {(template.hasSku ||
+                    template.hasBarcode) && (
+                    <div className="grid grid-cols-2 gap-3">
+                      {template.hasSku && (
+                        <FormField
+                          control={form.control}
+                          name="sku"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">
+                                SKU{" "}
+                                <span className="font-normal text-muted-foreground">
+                                (optional)
+                                </span>
+                              </FormLabel>
+
+                              <FormControl>
+                                <Input
+                                  placeholder="Reference code"
+                                  {...field}
+                                />
+                              </FormControl>
+
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+
+                      {template.hasBarcode && (
+                        <FormField
+                          control={form.control}
+                          name="barcode"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">
+                                Barcode{" "}
+                                <span className="font-normal text-muted-foreground">
+                                  (optional)
+                                </span>
+                              </FormLabel>
+
+                              <FormControl>
+                                <Input
+                                  placeholder="If it has one"
+                                  {...field}
+                                />
+                              </FormControl>
+
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+                    </div>
+                  )}
+                </section>
               </div>
             )}
 
