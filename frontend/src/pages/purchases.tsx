@@ -55,102 +55,135 @@ import {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleDateString(
-    "en-KE",
-    {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    },
-  );
+  return new Date(value).toLocaleDateString("en-KE", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
-function purchaseLabel(
-  purchase: StockPurchase,
-) {
-  return (
-    purchase.purchaseNumber ??
-    `Purchase #${purchase.id}`
-  );
+function purchaseLabel(purchase: StockPurchase) {
+  return purchase.purchaseNumber ?? `Purchase #${purchase.id}`;
 }
 
-function paymentLabel(
-  purchase: StockPurchase,
-) {
+function paymentLabel(purchase: StockPurchase) {
   if (purchase.paymentStatus === "paid") {
     return "Paid";
   }
 
-  if (
-    purchase.paymentStatus ===
-    "partially_paid"
-  ) {
+  if (purchase.paymentStatus === "partially_paid") {
     return "Part paid";
   }
 
   return "Not paid";
 }
 
-function purchaseGroups(
-  purchase: StockPurchase,
-) {
+function purchaseGroups(purchase: StockPurchase) {
   if (purchase.stockGroups.length > 0) {
-    return purchase.stockGroups.map(
-      (group) => ({
-        key: `group-${group.id}`,
-        name: group.category,
-        quantity: group.quantity,
-        description: group.description,
-      }),
-    );
+    return purchase.stockGroups.map((group) => ({
+      key: `group-${group.id}`,
+      name: group.category,
+      quantity: group.quantity,
+      description: group.description,
+    }));
   }
 
   // Historical purchases created before the simplified
   // stock-group model.
-  return purchase.legacyItems.map(
-    (item) => ({
-      key: `legacy-${item.id}`,
-      name:
-        item.productName ??
-        "Stock item",
-      quantity: item.quantity,
-      description: null,
-    }),
-  );
+  return purchase.legacyItems.map((item) => ({
+    key: `legacy-${item.id}`,
+    name: item.productName ?? "Stock item",
+    quantity: item.quantity,
+    description: null,
+  }));
 }
 
 // ─── Summary card ─────────────────────────────────────────────────────────────
+
+type SummaryTone = "invested" | "stock" | "owed" | "month";
 
 function SummaryCard({
   icon: Icon,
   label,
   value,
   helper,
+  tone,
 }: {
   icon: React.ElementType;
   label: string;
   value: string;
   helper: string;
+  tone: SummaryTone;
 }) {
+  const toneStyles: Record<
+    SummaryTone,
+    {
+      icon: string;
+      glow: string;
+      bar: string;
+    }
+  > = {
+    invested: {
+      icon: "bg-emerald-500/10 text-emerald-500",
+      glow: "bg-emerald-500/5",
+      bar: "bg-emerald-500",
+    },
+    stock: {
+      icon: "bg-blue-500/10 text-blue-500",
+      glow: "bg-blue-500/5",
+      bar: "bg-blue-500",
+    },
+    owed: {
+      icon: "bg-amber-500/10 text-amber-500",
+      glow: "bg-amber-500/5",
+      bar: "bg-amber-500",
+    },
+    month: {
+      icon: "bg-violet-500/10 text-violet-500",
+      glow: "bg-violet-500/5",
+      bar: "bg-violet-500",
+    },
+  };
+
+  const styles = toneStyles[tone];
+
   return (
-    <div className="rounded-2xl border border-border bg-card p-3 shadow-sm md:p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-medium text-muted-foreground md:text-xs">
+    <div className="relative min-w-0 overflow-hidden rounded-2xl border border-border bg-card p-3 shadow-sm md:p-4">
+      <div
+        className={cn(
+          "pointer-events-none absolute -right-7 -top-7 h-20 w-20 rounded-full blur-2xl",
+          styles.glow,
+        )}
+      />
+
+      <div className="relative">
+        <div className="flex items-start justify-between gap-2">
+          <p className="min-w-0 text-[10px] font-medium text-muted-foreground md:text-xs">
             {label}
           </p>
 
-          <p className="mt-1 truncate text-base font-semibold tabular-nums text-foreground md:text-xl">
-            {value}
-          </p>
-
-          <p className="mt-0.5 text-[9px] text-muted-foreground md:text-[11px]">
-            {helper}
-          </p>
+          <div
+            className={cn(
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg md:h-8 md:w-8 md:rounded-xl",
+              styles.icon,
+            )}
+          >
+            <Icon className="h-3.5 w-3.5 md:h-4 md:w-4" />
+          </div>
         </div>
 
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Icon className="h-4 w-4" />
+        <p className="mt-2 whitespace-nowrap text-[clamp(0.94rem,4.15vw,1.25rem)] font-bold leading-none tracking-[-0.035em] tabular-nums text-foreground">
+          {value}
+        </p>
+
+        <p className="mt-2 min-h-[2.1em] text-[9px] leading-[1.35] text-muted-foreground md:text-[11px]">
+          {helper}
+        </p>
+
+        <div className="mt-2.5 h-0.5 overflow-hidden rounded-full bg-muted">
+          <div
+            className={cn("h-full w-2/5 rounded-full opacity-80", styles.bar)}
+          />
         </div>
       </div>
     </div>
@@ -166,53 +199,43 @@ function PurchaseCard({
   purchase: StockPurchase;
   onEdit: (purchase: StockPurchase) => void;
 }) {
-  const [expanded, setExpanded] =
-    useState(false);
+  const [expanded, setExpanded] = useState(false);
 
-  const [deleteOpen, setDeleteOpen] =
-    useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const [paymentOpen, setPaymentOpen] =
-    useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const deletePurchase =
-    useDeleteStockPurchase({
-      mutation: {
-        onSuccess: async () => {
-          await queryClient.invalidateQueries({
-            queryKey:
-              getListStockPurchasesQueryKey(),
-          });
+  const deletePurchase = useDeleteStockPurchase({
+    mutation: {
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({
+          queryKey: getListStockPurchasesQueryKey(),
+        });
 
-          await queryClient.invalidateQueries({
-            queryKey: [
-              "/api/debts/suppliers",
-            ],
-          });
+        await queryClient.invalidateQueries({
+          queryKey: ["/api/debts/suppliers"],
+        });
 
-          setDeleteOpen(false);
+        setDeleteOpen(false);
 
-          toast({
-            title: "Purchase deleted",
-            description: `${purchaseLabel(
-              purchase,
-            )} was removed.`,
-          });
-        },
-
-        onError: (error) => {
-          toast({
-            title:
-              "Could not delete purchase",
-            description: error.message,
-            variant: "destructive",
-          });
-        },
+        toast({
+          title: "Purchase deleted",
+          description: `${purchaseLabel(purchase)} was removed.`,
+        });
       },
-    });
+
+      onError: (error) => {
+        toast({
+          title: "Could not delete purchase",
+          description: error.message,
+          variant: "destructive",
+        });
+      },
+    },
+  });
 
   const handleDelete = () => {
     deletePurchase.mutate({
@@ -220,97 +243,72 @@ function PurchaseCard({
     });
   };
 
-  const groups =
-    purchaseGroups(purchase);
+  const groups = purchaseGroups(purchase);
 
   const paymentDebt: Debt | null =
-    purchase.supplierDebtId != null &&
-    purchase.supplierBalance > 0
+    purchase.supplierDebtId != null && purchase.supplierBalance > 0
       ? {
           id: purchase.supplierDebtId,
           name: purchase.supplierName,
-          phone:
-            purchase.supplierPhone ??
-            null,
-          description: `${purchaseLabel(
-            purchase,
-          )} stock purchase`,
+          phone: purchase.supplierPhone ?? null,
+          description: `${purchaseLabel(purchase)} stock purchase`,
           amount: purchase.totalCost,
-          amountPaid:
-            purchase.totalCost -
-            purchase.supplierBalance,
-          remaining:
-            purchase.supplierBalance,
+          amountPaid: purchase.totalCost - purchase.supplierBalance,
+          remaining: purchase.supplierBalance,
           dueDate: null,
-          notes:
-            purchase.notes ?? null,
-          createdAt:
-            purchase.createdAt,
-          updatedAt:
-            purchase.updatedAt,
+          notes: purchase.notes ?? null,
+          createdAt: purchase.createdAt,
+          updatedAt: purchase.updatedAt,
         }
       : null;
 
-  const isPaid =
-    purchase.paymentStatus === "paid";
+  const isPaid = purchase.paymentStatus === "paid";
 
-  const isPartial =
-    purchase.paymentStatus ===
-    "partially_paid";
+  const isPartial = purchase.paymentStatus === "partially_paid";
 
   return (
     <article className="border-b border-border last:border-b-0">
       <div className="flex items-start transition-colors hover:bg-muted/25">
         <button
           type="button"
-          onClick={() =>
-            setExpanded((current) => !current)
-          }
+          onClick={() => setExpanded((current) => !current)}
           className="min-w-0 flex-1 px-3 py-4 text-left md:px-5"
         >
-        <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <ReceiptText className="h-4 w-4" />
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <p className="text-xs font-semibold text-foreground md:text-sm">
-                {purchaseLabel(purchase)}
-              </p>
-
-              <span
-                className={cn(
-                  "inline-flex rounded-full px-2 py-0.5 text-[9px] font-medium md:text-[10px]",
-                  isPaid
-                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                    : isPartial
-                      ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                      : "bg-red-500/10 text-red-700 dark:text-red-400",
-                )}
-              >
-                {paymentLabel(purchase)}
-              </span>
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <ReceiptText className="h-4 w-4" />
             </div>
 
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[10px] text-muted-foreground md:text-xs">
-              <span>
-                {formatDate(
-                  purchase.purchaseDate,
-                )}
-              </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <p className="text-xs font-semibold text-foreground md:text-sm">
+                  {purchaseLabel(purchase)}
+                </p>
 
-              <span>·</span>
+                <span
+                  className={cn(
+                    "inline-flex rounded-full px-2 py-0.5 text-[9px] font-medium md:text-[10px]",
+                    isPaid
+                      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                      : isPartial
+                        ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                        : "bg-red-500/10 text-red-700 dark:text-red-400",
+                  )}
+                >
+                  {paymentLabel(purchase)}
+                </span>
+              </div>
 
-              <span className="truncate">
-                {purchase.supplierName}
-              </span>
-            </div>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[10px] text-muted-foreground md:text-xs">
+                <span>{formatDate(purchase.purchaseDate)}</span>
 
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {groups
-                .slice(0, 3)
-                .map((group) => (
+                <span>·</span>
+
+                <span className="truncate">{purchase.supplierName}</span>
+              </div>
+
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {groups.slice(0, 3).map((group) => (
                   <span
                     key={group.key}
                     className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-[10px] text-muted-foreground md:text-[11px]"
@@ -322,46 +320,39 @@ function PurchaseCard({
                   </span>
                 ))}
 
-              {groups.length > 3 && (
-                <span className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-[10px] text-muted-foreground md:text-[11px]">
-                  +{groups.length - 3} more
-                </span>
-              )}
-            </div>
+                {groups.length > 3 && (
+                  <span className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-[10px] text-muted-foreground md:text-[11px]">
+                    +{groups.length - 3} more
+                  </span>
+                )}
+              </div>
 
-            <p className="mt-2 text-[10px] text-muted-foreground md:text-xs">
-              {purchase.totalQuantity}{" "}
-              {purchase.totalQuantity === 1
-                ? "item"
-                : "items"}
-            </p>
-          </div>
-
-          <div className="shrink-0 text-right">
-            <p className="text-xs font-semibold tabular-nums text-foreground md:text-sm">
-              {formatCurrency(
-                purchase.totalCost,
-              )}
-            </p>
-
-            {!isPaid && (
-              <p className="mt-0.5 text-[9px] font-medium text-amber-700 dark:text-amber-400 md:text-[11px]">
-                {formatCurrency(
-                  purchase.supplierBalance,
-                )}{" "}
-                owed
+              <p className="mt-2 text-[10px] text-muted-foreground md:text-xs">
+                {purchase.totalQuantity}{" "}
+                {purchase.totalQuantity === 1 ? "item" : "items"}
               </p>
-            )}
+            </div>
 
-            <div className="mt-2 flex justify-end text-muted-foreground">
-              {expanded ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
+            <div className="shrink-0 text-right">
+              <p className="text-xs font-semibold tabular-nums text-foreground md:text-sm">
+                {formatCurrency(purchase.totalCost)}
+              </p>
+
+              {!isPaid && (
+                <p className="mt-0.5 text-[9px] font-medium text-amber-700 dark:text-amber-400 md:text-[11px]">
+                  {formatCurrency(purchase.supplierBalance)} owed
+                </p>
               )}
+
+              <div className="mt-2 flex justify-end text-muted-foreground">
+                {expanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </div>
             </div>
           </div>
-        </div>
         </button>
 
         <div className="shrink-0 py-3 pr-2 md:pr-3">
@@ -372,33 +363,20 @@ function PurchaseCard({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                aria-label={`Actions for ${purchaseLabel(
-                  purchase,
-                )}`}
+                aria-label={`Actions for ${purchaseLabel(purchase)}`}
               >
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent
-              align="end"
-              className="w-44"
-            >
-              <DropdownMenuItem
-                onSelect={() =>
-                  onEdit(purchase)
-                }
-              >
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onSelect={() => onEdit(purchase)}>
                 <Pencil className="mr-2 h-4 w-4" />
                 Edit purchase
               </DropdownMenuItem>
 
               {paymentDebt && (
-                <DropdownMenuItem
-                  onSelect={() =>
-                    setPaymentOpen(true)
-                  }
-                >
+                <DropdownMenuItem onSelect={() => setPaymentOpen(true)}>
                   <CreditCard className="mr-2 h-4 w-4" />
                   Record payment
                 </DropdownMenuItem>
@@ -406,9 +384,7 @@ function PurchaseCard({
 
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
-                onSelect={() =>
-                  setDeleteOpen(true)
-                }
+                onSelect={() => setDeleteOpen(true)}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete purchase
@@ -445,9 +421,7 @@ function PurchaseCard({
 
                       {group.description && (
                         <p className="mt-0.5 text-[10px] text-muted-foreground">
-                          {
-                            group.description
-                          }
+                          {group.description}
                         </p>
                       )}
                     </div>
@@ -460,16 +434,11 @@ function PurchaseCard({
               </div>
 
               <div className="mt-2 flex items-center justify-between px-1 text-xs">
-                <span className="text-muted-foreground">
-                  Total stock
-                </span>
+                <span className="text-muted-foreground">Total stock</span>
 
                 <span className="font-semibold tabular-nums">
                   {purchase.totalQuantity}{" "}
-                  {purchase.totalQuantity ===
-                  1
-                    ? "item"
-                    : "items"}
+                  {purchase.totalQuantity === 1 ? "item" : "items"}
                 </span>
               </div>
             </section>
@@ -488,90 +457,62 @@ function PurchaseCard({
               <div className="rounded-xl border border-border bg-background p-3">
                 <div className="space-y-2 text-xs">
                   <div className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">
-                      Stock cost
-                    </span>
+                    <span className="text-muted-foreground">Stock cost</span>
 
                     <span className="tabular-nums">
-                      {formatCurrency(
-                        purchase.goodsTotal,
-                      )}
+                      {formatCurrency(purchase.goodsTotal)}
                     </span>
                   </div>
 
-                  {purchase.sharedCosts.map(
-                    (cost) => (
-                      <div
-                        key={cost.id}
-                        className="flex justify-between gap-4"
-                      >
-                        <span className="truncate text-muted-foreground">
-                          {cost.label}
-                        </span>
+                  {purchase.sharedCosts.map((cost) => (
+                    <div key={cost.id} className="flex justify-between gap-4">
+                      <span className="truncate text-muted-foreground">
+                        {cost.label}
+                      </span>
 
-                        <span className="shrink-0 tabular-nums">
-                          {formatCurrency(
-                            cost.amount,
-                          )}
-                        </span>
-                      </div>
-                    ),
-                  )}
+                      <span className="shrink-0 tabular-nums">
+                        {formatCurrency(cost.amount)}
+                      </span>
+                    </div>
+                  ))}
 
-                  {purchase.sharedCostsTotal >
-                    0 &&
-                    purchase.sharedCosts
-                      .length === 0 && (
+                  {purchase.sharedCostsTotal > 0 &&
+                    purchase.sharedCosts.length === 0 && (
                       <div className="flex justify-between gap-4">
                         <span className="text-muted-foreground">
                           Additional costs
                         </span>
 
                         <span className="tabular-nums">
-                          {formatCurrency(
-                            purchase.sharedCostsTotal,
-                          )}
+                          {formatCurrency(purchase.sharedCostsTotal)}
                         </span>
                       </div>
                     )}
 
                   <div className="border-t border-border pt-2">
                     <div className="flex justify-between gap-4 font-semibold">
-                      <span>
-                        Total investment
-                      </span>
+                      <span>Total investment</span>
 
                       <span className="tabular-nums">
-                        {formatCurrency(
-                          purchase.totalCost,
-                        )}
+                        {formatCurrency(purchase.totalCost)}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">
-                      Paid
-                    </span>
+                    <span className="text-muted-foreground">Paid</span>
 
                     <span className="tabular-nums">
-                      {formatCurrency(
-                        purchase.amountPaid,
-                      )}
+                      {formatCurrency(purchase.amountPaid)}
                     </span>
                   </div>
 
-                  {purchase.supplierBalance >
-                    0 && (
+                  {purchase.supplierBalance > 0 && (
                     <div className="flex justify-between gap-4 font-medium text-amber-700 dark:text-amber-400">
-                      <span>
-                        Supplier balance
-                      </span>
+                      <span>Supplier balance</span>
 
                       <span className="tabular-nums">
-                        {formatCurrency(
-                          purchase.supplierBalance,
-                        )}
+                        {formatCurrency(purchase.supplierBalance)}
                       </span>
                     </div>
                   )}
@@ -580,9 +521,7 @@ function PurchaseCard({
             </section>
           </div>
 
-          {(purchase.reference ||
-            purchase.notes ||
-            purchase.supplierPhone) && (
+          {(purchase.reference || purchase.notes || purchase.supplierPhone) && (
             <section className="mt-5 border-t border-border pt-4">
               <h4 className="mb-2 text-xs font-semibold text-foreground">
                 Other details
@@ -611,19 +550,13 @@ function PurchaseCard({
                       Supplier phone
                     </p>
 
-                    <p className="text-foreground">
-                      {
-                        purchase.supplierPhone
-                      }
-                    </p>
+                    <p className="text-foreground">{purchase.supplierPhone}</p>
                   </div>
                 )}
 
                 {purchase.notes && (
                   <div className="sm:col-span-2">
-                    <p className="text-[10px] text-muted-foreground">
-                      Notes
-                    </p>
+                    <p className="text-[10px] text-muted-foreground">Notes</p>
 
                     <p className="whitespace-pre-wrap text-foreground">
                       {purchase.notes}
@@ -645,20 +578,15 @@ function PurchaseCard({
         />
       )}
 
-      <AlertDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-      >
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Delete{" "}
-              {purchaseLabel(purchase)}?
+              Delete {purchaseLabel(purchase)}?
             </AlertDialogTitle>
 
             <AlertDialogDescription>
-              This will permanently remove
-              this purchase
+              This will permanently remove this purchase
               {purchase.supplierDebtId
                 ? " and its linked supplier debt and payment history."
                 : "."}{" "}
@@ -667,27 +595,19 @@ function PurchaseCard({
           </AlertDialogHeader>
 
           <AlertDialogFooter>
-            <AlertDialogCancel
-              disabled={
-                deletePurchase.isPending
-              }
-            >
+            <AlertDialogCancel disabled={deletePurchase.isPending}>
               Cancel
             </AlertDialogCancel>
 
             <AlertDialogAction
-              disabled={
-                deletePurchase.isPending
-              }
+              disabled={deletePurchase.isPending}
               onClick={(event) => {
                 event.preventDefault();
                 handleDelete();
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deletePurchase.isPending
-                ? "Deleting…"
-                : "Delete purchase"}
+              {deletePurchase.isPending ? "Deleting…" : "Delete purchase"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -699,76 +619,53 @@ function PurchaseCard({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function Purchases() {
-  const [dialogOpen, setDialogOpen] =
-    useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
-  const [
-    editingPurchase,
-    setEditingPurchase,
-  ] = useState<StockPurchase | null>(
+  const [editingPurchase, setEditingPurchase] = useState<StockPurchase | null>(
     null,
   );
 
-  const {
-    data: purchases = [],
-    isLoading,
-  } = useListStockPurchases();
+  const { data: purchases = [], isLoading } = useListStockPurchases();
 
   const stats = useMemo(() => {
     const now = new Date();
 
-    const totalInvested =
-      purchases.reduce(
-        (sum, purchase) =>
-          sum + purchase.totalCost,
-        0,
+    const totalInvested = purchases.reduce(
+      (sum, purchase) => sum + purchase.totalCost,
+      0,
+    );
+
+    const totalItems = purchases.reduce(
+      (sum, purchase) => sum + purchase.totalQuantity,
+      0,
+    );
+
+    const supplierBalance = purchases.reduce(
+      (sum, purchase) => sum + purchase.supplierBalance,
+      0,
+    );
+
+    const thisMonth = purchases.filter((purchase) => {
+      const date = new Date(purchase.purchaseDate);
+
+      return (
+        date.getFullYear() === now.getFullYear() &&
+        date.getMonth() === now.getMonth()
       );
+    });
 
-    const totalItems =
-      purchases.reduce(
-        (sum, purchase) =>
-          sum + purchase.totalQuantity,
-        0,
-      );
-
-    const supplierBalance =
-      purchases.reduce(
-        (sum, purchase) =>
-          sum +
-          purchase.supplierBalance,
-        0,
-      );
-
-    const thisMonth =
-      purchases.filter((purchase) => {
-        const date = new Date(
-          purchase.purchaseDate,
-        );
-
-        return (
-          date.getFullYear() ===
-            now.getFullYear() &&
-          date.getMonth() ===
-            now.getMonth()
-        );
-      });
-
-    const thisMonthValue =
-      thisMonth.reduce(
-        (sum, purchase) =>
-          sum + purchase.totalCost,
-        0,
-      );
+    const thisMonthValue = thisMonth.reduce(
+      (sum, purchase) => sum + purchase.totalCost,
+      0,
+    );
 
     return {
       totalInvested,
       totalItems,
       supplierBalance,
       thisMonthValue,
-      purchaseCount:
-        purchases.length,
-      thisMonthCount:
-        thisMonth.length,
+      purchaseCount: purchases.length,
+      thisMonthCount: thisMonth.length,
     };
   }, [purchases]);
 
@@ -783,9 +680,7 @@ export function Purchases() {
           </h2>
 
           <p className="mt-1 hidden text-sm text-muted-foreground md:block">
-            A simple record of stock bought
-            and money invested in the
-            business.
+            A simple record of stock bought and money invested in the business.
           </p>
         </div>
 
@@ -800,13 +695,9 @@ export function Purchases() {
         >
           <PackagePlus className="h-3.5 w-3.5 md:mr-2 md:h-4 md:w-4" />
 
-          <span className="hidden md:inline">
-            Record Purchase
-          </span>
+          <span className="hidden md:inline">Record Purchase</span>
 
-          <span className="ml-1 md:hidden">
-            Record
-          </span>
+          <span className="ml-1 md:hidden">Record</span>
         </Button>
       </div>
 
@@ -817,55 +708,44 @@ export function Purchases() {
           {Array.from({
             length: 4,
           }).map((_, index) => (
-            <Skeleton
-              key={index}
-              className="h-24 rounded-2xl"
-            />
+            <Skeleton key={index} className="h-24 rounded-2xl" />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2 md:gap-3 lg:grid-cols-4">
           <SummaryCard
             icon={ReceiptText}
+            tone="invested"
             label="Total invested"
-            value={formatCurrency(
-              stats.totalInvested,
-            )}
+            value={formatCurrency(stats.totalInvested)}
             helper={`${stats.purchaseCount} purchase${
-              stats.purchaseCount === 1
-                ? ""
-                : "s"
+              stats.purchaseCount === 1 ? "" : "s"
             } recorded`}
           />
 
           <SummaryCard
             icon={Package}
+            tone="stock"
             label="Stock bought"
-            value={stats.totalItems.toLocaleString(
-              "en-KE",
-            )}
+            value={stats.totalItems.toLocaleString("en-KE")}
             helper="Items recorded in purchases"
           />
 
           <SummaryCard
             icon={Truck}
+            tone="owed"
             label="Amount owed"
-            value={formatCurrency(
-              stats.supplierBalance,
-            )}
+            value={formatCurrency(stats.supplierBalance)}
             helper="Outstanding supplier balance"
           />
 
           <SummaryCard
             icon={CalendarDays}
+            tone="month"
             label="This month"
-            value={formatCurrency(
-              stats.thisMonthValue,
-            )}
+            value={formatCurrency(stats.thisMonthValue)}
             helper={`${stats.thisMonthCount} purchase${
-              stats.thisMonthCount === 1
-                ? ""
-                : "s"
+              stats.thisMonthCount === 1 ? "" : "s"
             }`}
           />
         </div>
@@ -880,8 +760,7 @@ export function Purchases() {
           </h3>
 
           <p className="mt-0.5 text-[10px] text-muted-foreground md:text-xs">
-            Tap a purchase to see its stock,
-            costs and payment details.
+            Tap a purchase to see its stock, costs and payment details.
           </p>
         </div>
 
@@ -891,27 +770,20 @@ export function Purchases() {
               {Array.from({
                 length: 4,
               }).map((_, index) => (
-                <Skeleton
-                  key={index}
-                  className="h-24 rounded-xl"
-                />
+                <Skeleton key={index} className="h-24 rounded-xl" />
               ))}
             </div>
           ) : purchases.length > 0 ? (
-            purchases.map(
-              (purchase) => (
-                <PurchaseCard
-                  key={purchase.id}
-                  purchase={purchase}
-                  onEdit={(selected) => {
-                    setEditingPurchase(
-                      selected,
-                    );
-                    setDialogOpen(true);
-                  }}
-                />
-              ),
-            )
+            purchases.map((purchase) => (
+              <PurchaseCard
+                key={purchase.id}
+                purchase={purchase}
+                onEdit={(selected) => {
+                  setEditingPurchase(selected);
+                  setDialogOpen(true);
+                }}
+              />
+            ))
           ) : (
             <div className="flex flex-col items-center px-5 py-14 text-center">
               <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -923,20 +795,15 @@ export function Purchases() {
               </p>
 
               <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-                Record stock purchases here
-                to keep track of how much
-                stock came in, how much was
-                invested and what is still
-                owed to suppliers.
+                Record stock purchases here to keep track of how much stock came
+                in, how much was invested and what is still owed to suppliers.
               </p>
 
               <Button
                 type="button"
                 size="sm"
                 className="mt-4"
-                onClick={() =>
-                  setDialogOpen(true)
-                }
+                onClick={() => setDialogOpen(true)}
               >
                 <PackagePlus className="mr-2 h-4 w-4" />
                 Record first purchase

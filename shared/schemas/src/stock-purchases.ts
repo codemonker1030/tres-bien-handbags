@@ -143,6 +143,25 @@ export const GetStockPurchaseParams = zod.object({
   id: zod.coerce.number().int().positive(),
 });
 
+/**
+ * Allocate units from a purchase group into an existing Inventory product.
+ *
+ * Cost values are deliberately NOT accepted from the client.
+ * The server derives them from the purchase.
+ */
+export const AllocatePurchaseGroupParams = zod.object({
+  groupId: zod.coerce.number().int().positive(),
+});
+
+export const AllocatePurchaseGroupBody = zod.object({
+  productId: zod.number().int().positive(),
+  quantity: zod.number().int().positive(),
+});
+
+export type AllocatePurchaseGroupInput =
+  zod.infer<typeof AllocatePurchaseGroupBody>;
+
+
 // ─── Response: additional cost ────────────────────────────────────────────────
 
 export const StockPurchaseCostResponse = zod.object({

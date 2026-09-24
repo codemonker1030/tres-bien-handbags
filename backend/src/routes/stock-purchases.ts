@@ -10,12 +10,15 @@ import {
   stockPurchaseGroupsTable,
   stockPurchaseItemsTable,
   stockPurchaseCostsTable,
+  inventoryCostLayersTable,
 } from "@workspace/db";
 
 import {
   CreateStockPurchaseBody,
   UpdateStockPurchaseBody,
   GetStockPurchaseParams,
+  AllocatePurchaseGroupParams,
+  AllocatePurchaseGroupBody,
   StockPurchaseResponse,
   ListStockPurchasesResponse,
 } from "@workspace/schemas";
@@ -553,6 +556,227 @@ router.get(
   },
 );
 
+// ─── ALLOCATE PURCHASE GROUP TO INVENTORY ─────────────────────────────────────
+
+router.post(
+  "/stock-purchases/groups/:groupId/allocate",
+
+  async (req, res): Promise<void> => {
+    const params = AllocatePurchaseGroupParams.safeParse(req.params);
+
+    if (!params.success) {
+      res.status(400).json({
+        error: params.error.message,
+      });
+      return;
+    }
+
+    const body = AllocatePurchaseGroupBody.safeParse(req.body);
+
+    if (!body.success) {
+      res.status(400).json({
+        error: body.error.message,
+      });
+      return;
+    }
+
+    try {
+      const result = await db.transaction(async (tx) => {
+        const groupId = params.data.groupId;
+        const productId = body.data.productId;
+        const quantity = body.data.quantity;
+
+        /**
+         * Serialize allocations for this purchase group.
+         *
+         * Without this row lock, two requests could both read the same
+         * available quantity and over-allocate the purchase.
+         */
+        await tx.execute(
+          sql`select id
+              from stock_purchase_groups
+              where id = ${groupId}
+              for update`,
+        );
+
+        const [group] = await tx
+          .select()
+          .from(stockPurchaseGroupsTable)
+          .where(eq(stockPurchaseGroupsTable.id, groupId));
+
+        if (!group) {
+          throw new Error("Purchase group not found");
+        }
+
+        const [purchase] = await tx
+          .select()
+          .from(stockPurchasesTable)
+          .where(eq(stockPurchasesTable.id, group.purchaseId));
+
+        if (!purchase) {
+          throw new Error("Stock purchase not found");
+        }
+
+        const [product] = await tx
+          .select()
+          .from(productsTable)
+          .where(eq(productsTable.id, productId));
+
+        if (!product) {
+          throw new Error("Inventory product not found");
+        }
+
+        /**
+         * Size-based products require allocation into individual sizes.
+         * Updating only products.stock would make their size breakdown
+         * disagree with the authoritative total.
+         */
+        if (
+          Array.isArray(product.sizeQuantities) &&
+          product.sizeQuantities.length > 0
+        ) {
+          throw new Error(
+            "Size-based inventory cannot be allocated through this workflow yet",
+          );
+        }
+
+        /**
+         * Cost layers themselves are the allocation ledger.
+         * SUM(quantityReceived) tells us exactly how many units from
+         * this purchase group have already entered Inventory.
+         */
+        const [allocation] = await tx
+          .select({
+            quantity: sql<number>`coalesce(sum(${inventoryCostLayersTable.quantityReceived}), 0)::int`,
+          })
+          .from(inventoryCostLayersTable)
+          .where(eq(inventoryCostLayersTable.purchaseGroupId, group.id));
+
+        const alreadyAllocated = Number(allocation?.quantity ?? 0);
+
+        const available = group.quantity - alreadyAllocated;
+
+        if (quantity > available) {
+          throw new Error(
+            `Only ${available} unit${available === 1 ? "" : "s"} remain available to add to Inventory`,
+          );
+        }
+
+        /**
+         * Allocate purchase-wide shared costs in proportion to
+         * this group's goods value.
+         *
+         * Example:
+         * group goods value / purchase goods total = group's share
+         * of transport and other shared purchase costs.
+         */
+        const unitGoodsCost = Number(group.unitBuyingPrice);
+
+        const groupGoodsTotal = group.quantity * unitGoodsCost;
+
+        const purchaseGoodsTotal = Number(purchase.goodsTotal);
+
+        const purchaseSharedCostsTotal = Number(purchase.sharedCostsTotal);
+
+        const groupShare =
+          purchaseGoodsTotal > 0 ? groupGoodsTotal / purchaseGoodsTotal : 0;
+
+        const groupSharedCost = purchaseSharedCostsTotal * groupShare;
+
+        const unitSharedCost =
+          group.quantity > 0 ? groupSharedCost / group.quantity : 0;
+
+        const roundedUnitGoodsCost = roundMoney(unitGoodsCost);
+
+        const roundedUnitSharedCost = roundMoney(unitSharedCost);
+
+        const landedUnitCost = roundMoney(
+          roundedUnitGoodsCost + roundedUnitSharedCost,
+        );
+
+        /**
+         * products.stock remains the authoritative quantity used
+         * throughout the existing app.
+         *
+         * Increment it atomically rather than calculating a new stock
+         * value in application memory.
+         */
+        const [updatedProduct] = await tx
+          .update(productsTable)
+          .set({
+            stock: sql`${productsTable.stock} + ${quantity}`,
+          })
+          .where(eq(productsTable.id, product.id))
+          .returning();
+
+        if (!updatedProduct) {
+          throw new Error("Failed to update Inventory stock");
+        }
+
+        const [costLayer] = await tx
+          .insert(inventoryCostLayersTable)
+          .values({
+            productId: product.id,
+            purchaseGroupId: group.id,
+
+            quantityReceived: quantity,
+            quantityRemaining: quantity,
+
+            unitGoodsCost: moneyString(roundedUnitGoodsCost),
+
+            unitSharedCost: moneyString(roundedUnitSharedCost),
+
+            landedUnitCost: moneyString(landedUnitCost),
+
+            receivedAt: new Date(),
+          })
+          .returning();
+
+        if (!costLayer) {
+          throw new Error("Failed to create inventory cost layer");
+        }
+
+        return {
+          product: {
+            id: updatedProduct.id,
+            name: updatedProduct.name,
+            stock: updatedProduct.stock,
+          },
+
+          allocation: {
+            purchaseGroupId: group.id,
+            quantityAllocated: quantity,
+            quantityPreviouslyAllocated: alreadyAllocated,
+            quantityRemaining: available - quantity,
+          },
+
+          costLayer: {
+            id: costLayer.id,
+            quantityReceived: costLayer.quantityReceived,
+            quantityRemaining: costLayer.quantityRemaining,
+            unitGoodsCost: Number(costLayer.unitGoodsCost),
+            unitSharedCost: Number(costLayer.unitSharedCost),
+            landedUnitCost: Number(costLayer.landedUnitCost),
+          },
+        };
+      });
+
+      res.status(201).json(result);
+    } catch (error) {
+      console.error("PURCHASE GROUP ALLOCATION FAILED:", error);
+
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Failed to add purchased stock to Inventory";
+
+      res.status(400).json({
+        error: message,
+      });
+    }
+  },
+);
+
 // ─── UPDATE STOCK PURCHASE ────────────────────────────────────────────────────
 
 router.patch(
@@ -606,6 +830,34 @@ router.patch(
         if (existingGroups.length === 0) {
           throw new Error(
             "Historical purchases cannot be edited with the new purchase form",
+          );
+        }
+
+        /**
+         * Once any stock from this purchase has entered Inventory,
+         * its cost-defining data becomes accounting history.
+         *
+         * The current edit flow replaces purchase-group rows, so
+         * editing an allocated purchase would break provenance and
+         * could make previously allocated units allocatable again.
+         */
+        const [allocation] = await tx
+          .select({
+            count: sql<number>`count(*)::int`,
+          })
+          .from(inventoryCostLayersTable)
+          .innerJoin(
+            stockPurchaseGroupsTable,
+            eq(
+              inventoryCostLayersTable.purchaseGroupId,
+              stockPurchaseGroupsTable.id,
+            ),
+          )
+          .where(eq(stockPurchaseGroupsTable.purchaseId, purchase.id));
+
+        if (Number(allocation?.count ?? 0) > 0) {
+          throw new Error(
+            "This purchase cannot be edited because stock from it has already been added to Inventory",
           );
         }
 
@@ -889,6 +1141,30 @@ router.delete(
         }
 
         const supplierDebtId = purchase.supplierDebtId;
+
+        /**
+         * Once stock from this purchase has entered Inventory,
+         * preserve the purchase as part of the inventory cost trail.
+         */
+        const [allocation] = await tx
+          .select({
+            count: sql<number>`count(*)::int`,
+          })
+          .from(inventoryCostLayersTable)
+          .innerJoin(
+            stockPurchaseGroupsTable,
+            eq(
+              inventoryCostLayersTable.purchaseGroupId,
+              stockPurchaseGroupsTable.id,
+            ),
+          )
+          .where(eq(stockPurchaseGroupsTable.purchaseId, purchase.id));
+
+        if (Number(allocation?.count ?? 0) > 0) {
+          throw new Error(
+            "This purchase cannot be deleted because stock from it has already been added to Inventory",
+          );
+        }
 
         /**
          * Delete the purchase first.
