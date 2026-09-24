@@ -77,6 +77,7 @@ router.get("/sales", async (req, res): Promise<void> => {
       productName: productsTable.name,
       productImageUrl: productsTable.imageUrl,
       exactSellingPrice: salesTable.exactSellingPrice,
+      quantity: salesTable.quantity,
       paymentMethod: salesTable.paymentMethod,
       debtAmount: salesTable.debtAmount,
       customerName: salesTable.customerName,
@@ -260,16 +261,23 @@ router.post(
       })
       .returning();
 
-    if (product.stock > 0) {
-      await db
-        .update(productsTable)
-        .set({
-          stock: product.stock - 1,
-        })
-        .where(
-          eq(productsTable.id, params.data.id),
-        );
+    const quantity = parsed.data.quantity;
+
+    if (product.stock < quantity) {
+      res.status(400).json({
+        error: `Only ${product.stock} unit${product.stock === 1 ? "" : "s"} available in stock`,
+      });
+      return;
     }
+
+    await db
+      .update(productsTable)
+      .set({
+        stock: product.stock - quantity,
+      })
+      .where(
+        eq(productsTable.id, params.data.id),
+      );
 
     res.status(201).json(
       ListProductSalesResponseItem.parse(
@@ -315,6 +323,28 @@ router.patch(
     if (!product) {
       res.status(404).json({ error: "Product not found" });
       return;
+    }
+
+    const oldQuantity = existingSale.quantity;
+    const newQuantity = parsed.data.quantity;
+    const quantityDelta = newQuantity - oldQuantity;
+
+    // Increasing an existing sale consumes only the additional units.
+    // Decreasing it restores the difference.
+    if (quantityDelta > 0 && product.stock < quantityDelta) {
+      res.status(400).json({
+        error: `Only ${product.stock} additional unit${product.stock === 1 ? "" : "s"} available in stock`,
+      });
+      return;
+    }
+
+    if (quantityDelta !== 0) {
+      await db
+        .update(productsTable)
+        .set({
+          stock: product.stock - quantityDelta,
+        })
+        .where(eq(productsTable.id, product.id));
     }
 
     const remainingDebt = parsed.data.debtAmount ?? 0;
@@ -382,6 +412,7 @@ router.patch(
       .set({
         exactSellingPrice:
           parsed.data.exactSellingPrice.toFixed(2),
+        quantity: parsed.data.quantity,
         paymentMethod: parsed.data.paymentMethod,
         debtAmount: hasDebt
           ? remainingDebt.toFixed(2)
@@ -431,6 +462,22 @@ router.delete(
         .status(404)
         .json({ error: "Sale not found" });
       return;
+    }
+
+    // Deleting a sale reverses its inventory movement.
+    // If 3 units were sold, all 3 return to available stock.
+    const [product] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, deleted.productId));
+
+    if (product) {
+      await db
+        .update(productsTable)
+        .set({
+          stock: product.stock + deleted.quantity,
+        })
+        .where(eq(productsTable.id, deleted.productId));
     }
 
     // Removing the sale removes its debt too — the underlying transaction no longer

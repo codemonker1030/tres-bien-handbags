@@ -6,6 +6,7 @@ export const salesTable = pgTable("sales", {
   id: serial("id").primaryKey(),
   productId: integer("product_id").notNull().references(() => productsTable.id, { onDelete: "cascade" }),
   exactSellingPrice: numeric("exact_selling_price", { precision: 10, scale: 2 }).notNull(),
+  quantity: integer("quantity").notNull().default(1),
   paymentMethod: text("payment_method").notNull(),
   debtAmount: numeric("debt_amount", { precision: 10, scale: 2 }),
   customerName: text("customer_name"),

@@ -41,11 +41,16 @@ type SaleTypeFilter = "all" | SaleType;
 // ─── helpers ─────────────────────────────────────────────────────────────────
 // Uses the live remaining balance from the linked debt record when available,
 // so settling a debt from the Debts page automatically reclassifies the sale.
+function getSaleTotal(s: SaleWithProduct): number {
+  return s.exactSellingPrice * Math.max(1, s.quantity ?? 1);
+}
+
 function getSaleType(s: SaleWithProduct): SaleType {
   const debt = s.debtRemaining ?? s.debtAmount ?? 0;
+  const saleTotal = getSaleTotal(s);
 
   if (debt <= 0) return "paid";
-  if (debt >= s.exactSellingPrice) return "credit";
+  if (debt >= saleTotal) return "credit";
 
   return "partial";
 }
@@ -129,6 +134,7 @@ function EditSaleDialog({
 
   const [saleType, setSaleType] = useState<SaleType>("paid");
   const [sellingPrice, setSellingPrice] = useState("");
+  const [quantity, setQuantity] = useState(1);
   const [paymentMethod, setPaymentMethod] =
     useState<SalePaymentMethod>("cash");
   const [remainingBalance, setRemainingBalance] = useState("");
@@ -142,6 +148,7 @@ function EditSaleDialog({
 
     setSaleType(type);
     setSellingPrice(String(sale.exactSellingPrice));
+    setQuantity(Math.max(1, sale.quantity ?? 1));
     setPaymentMethod(sale.paymentMethod);
     setRemainingBalance(
       type === "paid" ? "" : String(getRemaining(sale)),
@@ -163,6 +170,16 @@ function EditSaleDialog({
       return;
     }
 
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      toast({
+        title: "Enter a valid quantity",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const saleTotal = price * quantity;
+
     let debtAmount = 0;
 
     if (saleType === "partial") {
@@ -171,12 +188,12 @@ function EditSaleDialog({
       if (
         !Number.isFinite(debtAmount) ||
         debtAmount <= 0 ||
-        debtAmount >= price
+        debtAmount >= saleTotal
       ) {
         toast({
           title: "Enter a valid remaining balance",
           description:
-            "For a partial sale, the balance must be more than 0 and less than the selling price.",
+            "For a partial sale, the balance must be more than 0 and less than the sale total.",
           variant: "destructive",
         });
         return;
@@ -184,7 +201,7 @@ function EditSaleDialog({
     }
 
     if (saleType === "credit") {
-      debtAmount = price;
+      debtAmount = saleTotal;
     }
 
     if (debtAmount > 0 && !customerName.trim()) {
@@ -202,6 +219,7 @@ function EditSaleDialog({
         id: sale.id,
         data: {
           exactSellingPrice: price,
+          quantity,
           paymentMethod,
           debtAmount,
           customerName:
@@ -284,18 +302,96 @@ function EditSaleDialog({
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Selling price (KSh)
-            </label>
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
-              value={sellingPrice}
-              onChange={(e) => setSellingPrice(e.target.value)}
-            />
+          <div className="grid grid-cols-[116px_1fr] gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Quantity
+              </label>
+
+              <div className="flex h-10 items-center overflow-hidden rounded-md border border-input bg-background">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQuantity((current) =>
+                      Math.max(1, current - 1),
+                    )
+                  }
+                  disabled={quantity <= 1}
+                  className="flex h-full w-8 shrink-0 items-center justify-center text-base text-muted-foreground hover:bg-muted disabled:opacity-30"
+                  aria-label="Decrease quantity"
+                >
+                  −
+                </button>
+
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={quantity}
+                  onChange={(event) => {
+                    const next = Number.parseInt(
+                      event.target.value,
+                      10,
+                    );
+
+                    if (!Number.isNaN(next)) {
+                      setQuantity(Math.max(1, next));
+                    }
+                  }}
+                  className="h-full min-w-0 flex-1 border-x border-input bg-transparent px-1 text-center text-sm font-semibold outline-none"
+                  aria-label="Sale quantity"
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQuantity((current) => current + 1)
+                  }
+                  className="flex h-full w-8 shrink-0 items-center justify-center text-base text-muted-foreground hover:bg-muted"
+                  aria-label="Increase quantity"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Price per item (KSh)
+              </label>
+
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={sellingPrice}
+                onChange={(e) =>
+                  setSellingPrice(e.target.value)
+                }
+              />
+            </div>
           </div>
+
+          {sellingPrice &&
+            Number.isFinite(Number(sellingPrice)) &&
+            Number(sellingPrice) > 0 && (
+              <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
+                <span className="text-xs text-muted-foreground">
+                  {quantity} {quantity === 1 ? "item" : "items"}
+                </span>
+
+                <div className="text-right">
+                  <p className="text-[10px] text-muted-foreground">
+                    Sale total
+                  </p>
+                  <p className="text-sm font-semibold text-foreground">
+                    {formatCurrency(
+                      Number(sellingPrice) * quantity,
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
 
           {saleType === "partial" && (
             <div className="space-y-1.5">
@@ -446,14 +542,27 @@ function SaleRow({
               </div>
             </div>
 
-            <p className="text-sm md:text-lg font-bold text-foreground shrink-0">
-              {formatCurrency(sale.exactSellingPrice)}
-            </p>
+            <div className="shrink-0 text-right">
+              <p className="text-sm md:text-lg font-bold text-foreground">
+                {formatCurrency(getSaleTotal(sale))}
+              </p>
+
+              {(sale.quantity ?? 1) > 1 && (
+                <p className="text-[10px] md:text-xs text-muted-foreground">
+                  {sale.quantity} ×{" "}
+                  {formatCurrency(sale.exactSellingPrice)}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="mt-1.5 flex items-end justify-between gap-2">
             <div className="min-w-0 text-[10px] md:text-xs text-muted-foreground space-y-0.5">
-              <p>{formatDate(sale.soldAt)}</p>
+              <p>
+                {formatDate(sale.soldAt)}
+                {(sale.quantity ?? 1) > 1 &&
+                  ` · ${sale.quantity} items`}
+              </p>
 
               {remaining > 0 && (
                 <p
@@ -541,7 +650,7 @@ function PaidSalesTab() {
       sum +
       Math.max(
         0,
-        sale.exactSellingPrice - getRemaining(sale),
+        getSaleTotal(sale) - getRemaining(sale),
       ),
     0,
   );

@@ -4,6 +4,7 @@ const saleShape = {
   id: zod.number(),
   productId: zod.number(),
   exactSellingPrice: zod.number(),
+  quantity: zod.number().int().min(1),
   paymentMethod: zod.enum(["cash", "mpesa"]),
   debtAmount: zod.number().nullish(),
   customerName: zod.string().nullish(),
@@ -46,6 +47,7 @@ export const CreateSaleParams = zod.object({
 
 export const CreateSaleBody = zod.object({
   exactSellingPrice: zod.number().min(0),
+  quantity: zod.number().int().min(1).default(1),
   paymentMethod: zod.enum(["cash", "mpesa"]),
   debtAmount: zod.number().min(0).optional(),
   customerName: zod.string().optional(),
@@ -64,6 +66,7 @@ export const UpdateSaleParams = zod.object({
 
 export const UpdateSaleBody = zod.object({
   exactSellingPrice: zod.number().min(0),
+  quantity: zod.number().int().min(1),
   paymentMethod: zod.enum(["cash", "mpesa"]),
   debtAmount: zod.number().min(0).optional(),
   customerName: zod.string().optional(),

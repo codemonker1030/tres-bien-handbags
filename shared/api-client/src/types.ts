@@ -191,6 +191,7 @@ export interface Sale {
   id: number;
   productId: number;
   exactSellingPrice: number;
+  quantity: number;
   paymentMethod: SalePaymentMethod;
 
   /** @nullable */
@@ -221,6 +222,7 @@ export interface SaleWithProduct extends Sale {
 
 export interface SaleInput {
   exactSellingPrice: number;
+  quantity: number;
   paymentMethod: SalePaymentMethod;
   debtAmount?: number;
   customerName?: string;
@@ -229,6 +231,7 @@ export interface SaleInput {
 
 export interface SaleUpdate {
   exactSellingPrice: number;
+  quantity: number;
   paymentMethod: SalePaymentMethod;
   debtAmount?: number;
   customerName?: string;

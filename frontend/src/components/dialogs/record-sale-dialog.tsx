@@ -52,6 +52,7 @@ export function RecordSaleDialog({ productId, open, onOpenChange }: RecordSaleDi
   });
 
   const [exactPrice, setExactPrice] = useState("");
+  const [quantity, setQuantity] = useState(1);
   const [saleType, setSaleType] = useState<SaleType>("paid");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa">("cash");
   const [amountPaid, setAmountPaid] = useState("");
@@ -62,6 +63,7 @@ export function RecordSaleDialog({ productId, open, onOpenChange }: RecordSaleDi
   useEffect(() => {
     if (open) {
       setExactPrice("");
+      setQuantity(1);
       setSaleType("paid");
       setPaymentMethod("cash");
       setAmountPaid("");
@@ -77,6 +79,28 @@ export function RecordSaleDialog({ productId, open, onOpenChange }: RecordSaleDi
       return;
     }
 
+    if (!product || product.stock <= 0) {
+      toast({
+        title: "This product is out of stock",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (
+      !Number.isInteger(quantity) ||
+      quantity < 1 ||
+      quantity > product.stock
+    ) {
+      toast({
+        title: `Choose a quantity between 1 and ${product.stock}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const saleTotal = price * quantity;
+
     let debtAmount: number | undefined;
     let method = paymentMethod;
 
@@ -88,14 +112,18 @@ export function RecordSaleDialog({ productId, open, onOpenChange }: RecordSaleDi
         toast({ title: "Enter the amount paid so far", variant: "destructive" });
         return;
       }
-      if (paid >= price) {
-        toast({ title: "Amount paid cannot exceed the selling price", variant: "destructive" });
+      if (paid >= saleTotal) {
+        toast({
+          title: "Amount paid must be less than the sale total",
+          variant: "destructive",
+        });
         return;
       }
-      debtAmount = price - paid;
+
+      debtAmount = saleTotal - paid;
     } else {
       // credit — nothing paid yet
-      debtAmount = price;
+      debtAmount = saleTotal;
       method = "cash"; // default; not meaningful for credit sales
     }
 
@@ -109,6 +137,7 @@ export function RecordSaleDialog({ productId, open, onOpenChange }: RecordSaleDi
         id: productId,
         data: {
           exactSellingPrice: price,
+          quantity,
           paymentMethod: method,
           debtAmount,
           customerName: debtAmount && debtAmount > 0 ? customerName.trim() : undefined,
@@ -183,18 +212,120 @@ export function RecordSaleDialog({ productId, open, onOpenChange }: RecordSaleDi
             </p>
           </div>
 
-          {/* Selling price */}
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Selling Price (KSh)</label>
-            <Input
-              type="number"
-              step="0.01"
-              placeholder="e.g. 1750"
-              value={exactPrice}
-              onChange={(e) => setExactPrice(e.target.value)}
-              className="text-base"
-            />
+          {/* Quantity + unit selling price */}
+          <div className="grid grid-cols-[116px_1fr] gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Quantity
+              </label>
+
+              <div className="flex h-10 items-center overflow-hidden rounded-md border border-input bg-background">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQuantity((current) =>
+                      Math.max(1, current - 1),
+                    )
+                  }
+                  disabled={quantity <= 1}
+                  className="flex h-full w-8 shrink-0 items-center justify-center text-base text-muted-foreground hover:bg-muted disabled:opacity-30"
+                  aria-label="Decrease quantity"
+                >
+                  −
+                </button>
+
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={product?.stock ?? 1}
+                  value={quantity}
+                  onChange={(event) => {
+                    const next = Number.parseInt(
+                      event.target.value,
+                      10,
+                    );
+
+                    if (Number.isNaN(next)) return;
+
+                    setQuantity(
+                      Math.max(
+                        1,
+                        Math.min(
+                          next,
+                          product?.stock ?? 1,
+                        ),
+                      ),
+                    );
+                  }}
+                  className="h-full min-w-0 flex-1 border-x border-input bg-transparent px-1 text-center text-sm font-semibold outline-none"
+                  aria-label="Sale quantity"
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQuantity((current) =>
+                      Math.min(
+                        product?.stock ?? current,
+                        current + 1,
+                      ),
+                    )
+                  }
+                  disabled={
+                    !product ||
+                    quantity >= product.stock
+                  }
+                  className="flex h-full w-8 shrink-0 items-center justify-center text-base text-muted-foreground hover:bg-muted disabled:opacity-30"
+                  aria-label="Increase quantity"
+                >
+                  +
+                </button>
+              </div>
+
+              <p className="text-[10px] text-muted-foreground">
+                {product?.stock ?? 0} available
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Price per item (KSh)
+              </label>
+
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="e.g. 1750"
+                value={exactPrice}
+                onChange={(e) =>
+                  setExactPrice(e.target.value)
+                }
+                className="text-sm"
+              />
+            </div>
           </div>
+
+          {exactPrice &&
+            !Number.isNaN(parseFloat(exactPrice)) &&
+            parseFloat(exactPrice) > 0 && (
+              <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
+                <span className="text-xs text-muted-foreground">
+                  {quantity} {quantity === 1 ? "item" : "items"}
+                </span>
+
+                <div className="text-right">
+                  <p className="text-[10px] text-muted-foreground">
+                    Sale total
+                  </p>
+                  <p className="text-sm font-semibold text-foreground">
+                    {formatCurrency(
+                      parseFloat(exactPrice) * quantity,
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
 
           {/* Amount paid — only for partial */}
           {saleType === "partial" && (
@@ -207,11 +338,20 @@ export function RecordSaleDialog({ productId, open, onOpenChange }: RecordSaleDi
                 value={amountPaid}
                 onChange={(e) => setAmountPaid(e.target.value)}
               />
-              {exactPrice && amountPaid && !isNaN(parseFloat(exactPrice)) && !isNaN(parseFloat(amountPaid)) && parseFloat(amountPaid) < parseFloat(exactPrice) && (
-                <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                  Debt remaining: {formatCurrency(parseFloat(exactPrice) - parseFloat(amountPaid))}
-                </p>
-              )}
+              {exactPrice &&
+                amountPaid &&
+                !isNaN(parseFloat(exactPrice)) &&
+                !isNaN(parseFloat(amountPaid)) &&
+                parseFloat(amountPaid) <
+                  parseFloat(exactPrice) * quantity && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                    Debt remaining:{" "}
+                    {formatCurrency(
+                      parseFloat(exactPrice) * quantity -
+                        parseFloat(amountPaid),
+                    )}
+                  </p>
+                )}
             </div>
           )}
 
