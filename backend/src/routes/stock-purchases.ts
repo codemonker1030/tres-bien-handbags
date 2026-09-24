@@ -1,9 +1,5 @@
 import { Router, type IRouter } from "express";
-import {
-  desc,
-  eq,
-  sql,
-} from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 
 import {
   db,
@@ -29,11 +25,7 @@ const router: IRouter = Router();
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function roundMoney(value: number): number {
-  return (
-    Math.round(
-      (value + Number.EPSILON) * 100,
-    ) / 100
-  );
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 function moneyString(value: number): string {
@@ -43,10 +35,7 @@ function moneyString(value: number): string {
 function getPaymentStatus(
   totalCost: number,
   supplierBalance: number,
-):
-  | "paid"
-  | "partially_paid"
-  | "unpaid" {
+): "paid" | "partially_paid" | "unpaid" {
   if (supplierBalance <= 0) {
     return "paid";
   }
@@ -67,40 +56,29 @@ function getPaymentStatus(
  * We generate it only after PostgreSQL has assigned the internal id.
  * The database id remains the authoritative unique sequence.
  */
-function makePurchaseNumber(
-  id: number,
-  purchaseDate: Date,
-): string {
-  const year =
-    purchaseDate.getUTCFullYear();
+function makePurchaseNumber(id: number, purchaseDate: Date): string {
+  const year = purchaseDate.getUTCFullYear();
 
-  return `PUR-${year}-${String(id).padStart(
-    4,
-    "0",
-  )}`;
+  return `PUR-${year}-${String(id).padStart(4, "0")}`;
 }
 
-function mapCost(
-  cost: typeof stockPurchaseCostsTable.$inferSelect,
-) {
+function mapCost(cost: typeof stockPurchaseCostsTable.$inferSelect) {
   return {
     ...cost,
 
     amount: Number(cost.amount),
 
-    createdAt:
-      cost.createdAt.toISOString(),
+    createdAt: cost.createdAt.toISOString(),
   };
 }
 
-function mapGroup(
-  group: typeof stockPurchaseGroupsTable.$inferSelect,
-) {
+function mapGroup(group: typeof stockPurchaseGroupsTable.$inferSelect) {
   return {
     ...group,
 
-    createdAt:
-      group.createdAt.toISOString(),
+    unitBuyingPrice: Number(group.unitBuyingPrice),
+
+    createdAt: group.createdAt.toISOString(),
   };
 }
 
@@ -119,59 +97,38 @@ function mapLegacyItem(
 
     productName,
 
-    unitBuyingPrice: Number(
-      item.unitBuyingPrice,
-    ),
+    unitBuyingPrice: Number(item.unitBuyingPrice),
 
-    goodsSubtotal: Number(
-      item.goodsSubtotal,
-    ),
+    goodsSubtotal: Number(item.goodsSubtotal),
 
-    allocatedSharedCost: Number(
-      item.allocatedSharedCost,
-    ),
+    allocatedSharedCost: Number(item.allocatedSharedCost),
 
-    landedSubtotal: Number(
-      item.landedSubtotal,
-    ),
+    landedSubtotal: Number(item.landedSubtotal),
 
-    landedUnitCost: Number(
-      item.landedUnitCost,
-    ),
+    landedUnitCost: Number(item.landedUnitCost),
 
-    createdAt:
-      item.createdAt.toISOString(),
+    createdAt: item.createdAt.toISOString(),
   };
 }
 
 function mapPurchase(
   purchase: typeof stockPurchasesTable.$inferSelect,
 
-  stockGroups: Array<
-    ReturnType<typeof mapGroup>
-  >,
+  stockGroups: Array<ReturnType<typeof mapGroup>>,
 
-  sharedCosts: Array<
-    ReturnType<typeof mapCost>
-  >,
+  sharedCosts: Array<ReturnType<typeof mapCost>>,
 
-  legacyItems: Array<
-    ReturnType<typeof mapLegacyItem>
-  >,
+  legacyItems: Array<ReturnType<typeof mapLegacyItem>>,
 
   supplierBalance: number,
 ) {
-  const goodsTotal =
-    Number(purchase.goodsTotal);
+  const goodsTotal = Number(purchase.goodsTotal);
 
-  const sharedCostsTotal =
-    Number(purchase.sharedCostsTotal);
+  const sharedCostsTotal = Number(purchase.sharedCostsTotal);
 
-  const totalCost =
-    Number(purchase.totalCost);
+  const totalCost = Number(purchase.totalCost);
 
-  const amountPaid =
-    Number(purchase.amountPaid);
+  const amountPaid = Number(purchase.amountPaid);
 
   /**
    * New purchases derive quantity from stock groups.
@@ -181,16 +138,8 @@ function mapPurchase(
    */
   const totalQuantity =
     stockGroups.length > 0
-      ? stockGroups.reduce(
-          (sum, group) =>
-            sum + group.quantity,
-          0,
-        )
-      : legacyItems.reduce(
-          (sum, item) =>
-            sum + item.quantity,
-          0,
-        );
+      ? stockGroups.reduce((sum, group) => sum + group.quantity, 0)
+      : legacyItems.reduce((sum, item) => sum + item.quantity, 0);
 
   return {
     ...purchase,
@@ -207,20 +156,13 @@ function mapPurchase(
 
     supplierBalance,
 
-    paymentStatus:
-      getPaymentStatus(
-        totalCost,
-        supplierBalance,
-      ),
+    paymentStatus: getPaymentStatus(totalCost, supplierBalance),
 
-    purchaseDate:
-      purchase.purchaseDate.toISOString(),
+    purchaseDate: purchase.purchaseDate.toISOString(),
 
-    createdAt:
-      purchase.createdAt.toISOString(),
+    createdAt: purchase.createdAt.toISOString(),
 
-    updatedAt:
-      purchase.updatedAt.toISOString(),
+    updatedAt: purchase.updatedAt.toISOString(),
 
     stockGroups,
 
@@ -233,15 +175,11 @@ function mapPurchase(
 // ─── Read helpers ─────────────────────────────────────────────────────────────
 
 async function getSupplierBalance(
-  purchase:
-    typeof stockPurchasesTable.$inferSelect,
+  purchase: typeof stockPurchasesTable.$inferSelect,
 ): Promise<number> {
   let balance = Math.max(
     0,
-    roundMoney(
-      Number(purchase.totalCost) -
-        Number(purchase.amountPaid),
-    ),
+    roundMoney(Number(purchase.totalCost) - Number(purchase.amountPaid)),
   );
 
   /**
@@ -250,27 +188,16 @@ async function getSupplierBalance(
    * That means repayments made later through Debts are reflected
    * automatically when the purchase is viewed again.
    */
-  if (
-    purchase.supplierDebtId != null
-  ) {
-    const [debt] =
-      await db
-        .select()
-        .from(supplierDebtsTable)
-        .where(
-          eq(
-            supplierDebtsTable.id,
-            purchase.supplierDebtId,
-          ),
-        );
+  if (purchase.supplierDebtId != null) {
+    const [debt] = await db
+      .select()
+      .from(supplierDebtsTable)
+      .where(eq(supplierDebtsTable.id, purchase.supplierDebtId));
 
     if (debt) {
       balance = Math.max(
         0,
-        roundMoney(
-          Number(debt.amount) -
-            Number(debt.amountPaid),
-        ),
+        roundMoney(Number(debt.amount) - Number(debt.amountPaid)),
       );
     }
   }
@@ -279,30 +206,17 @@ async function getSupplierBalance(
 }
 
 async function loadPurchaseDetails(
-  purchase:
-    typeof stockPurchasesTable.$inferSelect,
+  purchase: typeof stockPurchasesTable.$inferSelect,
 ) {
-  const groupRows =
-    await db
-      .select()
-      .from(stockPurchaseGroupsTable)
-      .where(
-        eq(
-          stockPurchaseGroupsTable.purchaseId,
-          purchase.id,
-        ),
-      );
+  const groupRows = await db
+    .select()
+    .from(stockPurchaseGroupsTable)
+    .where(eq(stockPurchaseGroupsTable.purchaseId, purchase.id));
 
-  const costRows =
-    await db
-      .select()
-      .from(stockPurchaseCostsTable)
-      .where(
-        eq(
-          stockPurchaseCostsTable.purchaseId,
-          purchase.id,
-        ),
-      );
+  const costRows = await db
+    .select()
+    .from(stockPurchaseCostsTable)
+    .where(eq(stockPurchaseCostsTable.purchaseId, purchase.id));
 
   /**
    * Historical product-level rows.
@@ -311,29 +225,19 @@ async function loadPurchaseDetails(
    * if an old product ever becomes unavailable, the procurement
    * history itself should still remain readable.
    */
-  const legacyRows =
-    await db
-      .select({
-        item: stockPurchaseItemsTable,
-        productName: productsTable.name,
-      })
-      .from(stockPurchaseItemsTable)
-      .leftJoin(
-        productsTable,
-        eq(
-          stockPurchaseItemsTable.productId,
-          productsTable.id,
-        ),
-      )
-      .where(
-        eq(
-          stockPurchaseItemsTable.purchaseId,
-          purchase.id,
-        ),
-      );
+  const legacyRows = await db
+    .select({
+      item: stockPurchaseItemsTable,
+      productName: productsTable.name,
+    })
+    .from(stockPurchaseItemsTable)
+    .leftJoin(
+      productsTable,
+      eq(stockPurchaseItemsTable.productId, productsTable.id),
+    )
+    .where(eq(stockPurchaseItemsTable.purchaseId, purchase.id));
 
-  const supplierBalance =
-    await getSupplierBalance(purchase);
+  const supplierBalance = await getSupplierBalance(purchase);
 
   return mapPurchase(
     purchase,
@@ -342,12 +246,8 @@ async function loadPurchaseDetails(
 
     costRows.map(mapCost),
 
-    legacyRows.map(
-      ({ item, productName }) =>
-        mapLegacyItem(
-          item,
-          productName ?? undefined,
-        ),
+    legacyRows.map(({ item, productName }) =>
+      mapLegacyItem(item, productName ?? undefined),
     ),
 
     supplierBalance,
@@ -360,10 +260,7 @@ router.post(
   "/stock-purchases",
 
   async (req, res): Promise<void> => {
-    const parsed =
-      CreateStockPurchaseBody.safeParse(
-        req.body,
-      );
+    const parsed = CreateStockPurchaseBody.safeParse(req.body);
 
     if (!parsed.success) {
       res.status(400).json({
@@ -376,324 +273,192 @@ router.post(
     const data = parsed.data;
 
     try {
-      const created =
-        await db.transaction(
-          async (tx) => {
-            const purchaseDate =
-              new Date(
-                data.purchaseDate,
-              );
+      const created = await db.transaction(async (tx) => {
+        const purchaseDate = new Date(data.purchaseDate);
 
-            if (
-              Number.isNaN(
-                purchaseDate.getTime(),
-              )
-            ) {
-              throw new Error(
-                "Invalid purchase date",
-              );
-            }
+        if (Number.isNaN(purchaseDate.getTime())) {
+          throw new Error("Invalid purchase date");
+        }
 
-            // ── Calculate totals ──────────────────────
+        // ── Calculate totals ──────────────────────
 
-            const goodsTotal =
-              roundMoney(
-                data.goodsTotal,
-              );
-
-            const sharedCostsTotal =
-              roundMoney(
-                data.sharedCosts.reduce(
-                  (sum, cost) =>
-                    sum + cost.amount,
-                  0,
-                ),
-              );
-
-            const totalCost =
-              roundMoney(
-                goodsTotal +
-                  sharedCostsTotal,
-              );
-
-            if (
-              data.amountPaid >
-              totalCost
-            ) {
-              throw new Error(
-                "Amount paid cannot exceed total purchase cost",
-              );
-            }
-
-            const supplierBalance =
-              roundMoney(
-                totalCost -
-                  data.amountPaid,
-              );
-
-            // ── Create purchase header ────────────────
-
-            const [purchase] =
-              await tx
-                .insert(
-                  stockPurchasesTable,
-                )
-                .values({
-                  supplierName:
-                    data.supplierName,
-
-                  supplierPhone:
-                    data.supplierPhone ||
-                    null,
-
-                  purchaseDate,
-
-                  goodsTotal:
-                    moneyString(
-                      goodsTotal,
-                    ),
-
-                  sharedCostsTotal:
-                    moneyString(
-                      sharedCostsTotal,
-                    ),
-
-                  totalCost:
-                    moneyString(
-                      totalCost,
-                    ),
-
-                  amountPaid:
-                    moneyString(
-                      data.amountPaid,
-                    ),
-
-                  reference:
-                    data.reference ||
-                    null,
-
-                  notes:
-                    data.notes ||
-                    null,
-                })
-                .returning();
-
-            // ── Generate readable purchase number ─────
-
-            const purchaseNumber =
-              makePurchaseNumber(
-                purchase.id,
-                purchaseDate,
-              );
-
-            const [numberedPurchase] =
-              await tx
-                .update(
-                  stockPurchasesTable,
-                )
-                .set({
-                  purchaseNumber,
-                })
-                .where(
-                  eq(
-                    stockPurchasesTable.id,
-                    purchase.id,
-                  ),
-                )
-                .returning();
-
-            // ── Store lightweight stock groups ─────────
-
-            const insertedGroups =
-              await tx
-                .insert(
-                  stockPurchaseGroupsTable,
-                )
-                .values(
-                  data.stockGroups.map(
-                    (group) => ({
-                      purchaseId:
-                        purchase.id,
-
-                      category:
-                        group.category,
-
-                      quantity:
-                        group.quantity,
-
-                      description:
-                        group.description ||
-                        null,
-                    }),
-                  ),
-                )
-                .returning();
-
-            // ── Store optional additional costs ────────
-
-            let insertedCosts:
-              Array<
-                typeof stockPurchaseCostsTable.$inferSelect
-              > = [];
-
-            if (
-              data.sharedCosts.length >
-              0
-            ) {
-              insertedCosts =
-                await tx
-                  .insert(
-                    stockPurchaseCostsTable,
-                  )
-                  .values(
-                    data.sharedCosts.map(
-                      (cost) => ({
-                        purchaseId:
-                          purchase.id,
-
-                        label:
-                          cost.label,
-
-                        amount:
-                          moneyString(
-                            cost.amount,
-                          ),
-                      }),
-                    ),
-                  )
-                  .returning();
-            }
-
-            // ── Automatically create supplier debt ────
-
-            let supplierDebtId:
-              | number
-              | null = null;
-
-            if (
-              supplierBalance > 0
-            ) {
-              const [debt] =
-                await tx
-                  .insert(
-                    supplierDebtsTable,
-                  )
-                  .values({
-                    supplierName:
-                      data.supplierName,
-
-                    phone:
-                      data.supplierPhone ||
-                      null,
-
-                    description:
-                      `Stock purchase ${purchaseNumber}`,
-
-                    /**
-                     * Keep the complete procurement amount and the
-                     * amount already paid.
-                     *
-                     * The Debts module can therefore calculate the
-                     * outstanding amount and track later repayments.
-                     */
-                    amount:
-                      moneyString(
-                        totalCost,
-                      ),
-
-                    amountPaid:
-                      moneyString(
-                        data.amountPaid,
-                      ),
-
-                    notes:
-                      data.notes ||
-                      undefined,
-                  })
-                  .returning();
-
-              supplierDebtId =
-                debt.id;
-
-              /**
-               * Record money paid at the time of purchase as the
-               * first payment-history entry.
-               *
-               * supplierDebts.amountPaid remains the cumulative
-               * cached total, while this row preserves what
-               * actually happened and when.
-               */
-              if (data.amountPaid > 0) {
-                await tx
-                  .insert(
-                    supplierDebtPaymentsTable,
-                  )
-                  .values({
-                    supplierDebtId:
-                      debt.id,
-
-                    amount:
-                      moneyString(
-                        data.amountPaid,
-                      ),
-
-                    paymentDate:
-                      purchaseDate,
-
-                    method: null,
-
-                    reference:
-                      data.reference ||
-                      null,
-
-                    notes:
-                      "Initial purchase payment",
-                  });
-              }
-
-              await tx
-                .update(
-                  stockPurchasesTable,
-                )
-                .set({
-                  supplierDebtId,
-                })
-                .where(
-                  eq(
-                    stockPurchasesTable.id,
-                    purchase.id,
-                  ),
-                );
-            }
-
-            const purchaseWithDebt = {
-              ...numberedPurchase,
-              supplierDebtId,
-            };
-
-            return mapPurchase(
-              purchaseWithDebt,
-
-              insertedGroups.map(
-                mapGroup,
-              ),
-
-              insertedCosts.map(
-                mapCost,
-              ),
-
-              [],
-
-              supplierBalance,
-            );
-          },
+        const goodsTotal = roundMoney(
+          data.stockGroups.reduce(
+            (sum, group) => sum + group.quantity * group.unitBuyingPrice,
+            0,
+          ),
         );
 
-      res.status(201).json(
-        StockPurchaseResponse.parse(
-          created,
-        ),
-      );
+        const sharedCostsTotal = roundMoney(
+          data.sharedCosts.reduce((sum, cost) => sum + cost.amount, 0),
+        );
+
+        const totalCost = roundMoney(goodsTotal + sharedCostsTotal);
+
+        if (data.amountPaid > totalCost) {
+          throw new Error("Amount paid cannot exceed total purchase cost");
+        }
+
+        const supplierBalance = roundMoney(totalCost - data.amountPaid);
+
+        // ── Create purchase header ────────────────
+
+        const [purchase] = await tx
+          .insert(stockPurchasesTable)
+          .values({
+            supplierName: data.supplierName,
+
+            supplierPhone: data.supplierPhone || null,
+
+            purchaseDate,
+
+            goodsTotal: moneyString(goodsTotal),
+
+            sharedCostsTotal: moneyString(sharedCostsTotal),
+
+            totalCost: moneyString(totalCost),
+
+            amountPaid: moneyString(data.amountPaid),
+
+            reference: data.reference || null,
+
+            notes: data.notes || null,
+          })
+          .returning();
+
+        // ── Generate readable purchase number ─────
+
+        const purchaseNumber = makePurchaseNumber(purchase.id, purchaseDate);
+
+        const [numberedPurchase] = await tx
+          .update(stockPurchasesTable)
+          .set({
+            purchaseNumber,
+          })
+          .where(eq(stockPurchasesTable.id, purchase.id))
+          .returning();
+
+        // ── Store lightweight stock groups ─────────
+
+        const insertedGroups = await tx
+          .insert(stockPurchaseGroupsTable)
+          .values(
+            data.stockGroups.map((group) => ({
+              purchaseId: purchase.id,
+
+              category: group.category,
+
+              quantity: group.quantity,
+
+              unitBuyingPrice: moneyString(group.unitBuyingPrice),
+
+              description: group.description || null,
+            })),
+          )
+          .returning();
+
+        // ── Store optional additional costs ────────
+
+        let insertedCosts: Array<typeof stockPurchaseCostsTable.$inferSelect> =
+          [];
+
+        if (data.sharedCosts.length > 0) {
+          insertedCosts = await tx
+            .insert(stockPurchaseCostsTable)
+            .values(
+              data.sharedCosts.map((cost) => ({
+                purchaseId: purchase.id,
+
+                label: cost.label,
+
+                amount: moneyString(cost.amount),
+              })),
+            )
+            .returning();
+        }
+
+        // ── Automatically create supplier debt ────
+
+        let supplierDebtId: number | null = null;
+
+        if (supplierBalance > 0) {
+          const [debt] = await tx
+            .insert(supplierDebtsTable)
+            .values({
+              supplierName: data.supplierName,
+
+              phone: data.supplierPhone || null,
+
+              description: `Stock purchase ${purchaseNumber}`,
+
+              /**
+               * Keep the complete procurement amount and the
+               * amount already paid.
+               *
+               * The Debts module can therefore calculate the
+               * outstanding amount and track later repayments.
+               */
+              amount: moneyString(totalCost),
+
+              amountPaid: moneyString(data.amountPaid),
+
+              notes: data.notes || undefined,
+            })
+            .returning();
+
+          supplierDebtId = debt.id;
+
+          /**
+           * Record money paid at the time of purchase as the
+           * first payment-history entry.
+           *
+           * supplierDebts.amountPaid remains the cumulative
+           * cached total, while this row preserves what
+           * actually happened and when.
+           */
+          if (data.amountPaid > 0) {
+            await tx.insert(supplierDebtPaymentsTable).values({
+              supplierDebtId: debt.id,
+
+              amount: moneyString(data.amountPaid),
+
+              paymentDate: purchaseDate,
+
+              method: null,
+
+              reference: data.reference || null,
+
+              notes: "Initial purchase payment",
+            });
+          }
+
+          await tx
+            .update(stockPurchasesTable)
+            .set({
+              supplierDebtId,
+            })
+            .where(eq(stockPurchasesTable.id, purchase.id));
+        }
+
+        const purchaseWithDebt = {
+          ...numberedPurchase,
+          supplierDebtId,
+        };
+
+        return mapPurchase(
+          purchaseWithDebt,
+
+          insertedGroups.map(mapGroup),
+
+          insertedCosts.map(mapCost),
+
+          [],
+
+          supplierBalance,
+        );
+      });
+
+      res.status(201).json(StockPurchaseResponse.parse(created));
     } catch (error) {
       const message =
         error instanceof Error
@@ -714,38 +479,21 @@ router.get(
 
   async (_req, res): Promise<void> => {
     try {
-      const purchases =
-        await db
-          .select()
-          .from(
-            stockPurchasesTable,
-          )
-          .orderBy(
-            desc(
-              stockPurchasesTable.purchaseDate,
-            ),
-            desc(
-              stockPurchasesTable.id,
-            ),
-          );
+      const purchases = await db
+        .select()
+        .from(stockPurchasesTable)
+        .orderBy(
+          desc(stockPurchasesTable.purchaseDate),
+          desc(stockPurchasesTable.id),
+        );
 
       const result = [];
 
-      for (
-        const purchase of purchases
-      ) {
-        result.push(
-          await loadPurchaseDetails(
-            purchase,
-          ),
-        );
+      for (const purchase of purchases) {
+        result.push(await loadPurchaseDetails(purchase));
       }
 
-      res.json(
-        ListStockPurchasesResponse.parse(
-          result,
-        ),
-      );
+      res.json(ListStockPurchasesResponse.parse(result));
     } catch (error) {
       const message =
         error instanceof Error
@@ -765,10 +513,7 @@ router.get(
   "/stock-purchases/:id",
 
   async (req, res): Promise<void> => {
-    const params =
-      GetStockPurchaseParams.safeParse(
-        req.params,
-      );
+    const params = GetStockPurchaseParams.safeParse(req.params);
 
     if (!params.success) {
       res.status(400).json({
@@ -779,38 +524,22 @@ router.get(
     }
 
     try {
-      const [purchase] =
-        await db
-          .select()
-          .from(
-            stockPurchasesTable,
-          )
-          .where(
-            eq(
-              stockPurchasesTable.id,
-              params.data.id,
-            ),
-          );
+      const [purchase] = await db
+        .select()
+        .from(stockPurchasesTable)
+        .where(eq(stockPurchasesTable.id, params.data.id));
 
       if (!purchase) {
         res.status(404).json({
-          error:
-            "Stock purchase not found",
+          error: "Stock purchase not found",
         });
 
         return;
       }
 
-      const result =
-        await loadPurchaseDetails(
-          purchase,
-        );
+      const result = await loadPurchaseDetails(purchase);
 
-      res.json(
-        StockPurchaseResponse.parse(
-          result,
-        ),
-      );
+      res.json(StockPurchaseResponse.parse(result));
     } catch (error) {
       const message =
         error instanceof Error
@@ -824,18 +553,13 @@ router.get(
   },
 );
 
-
-
 // ─── UPDATE STOCK PURCHASE ────────────────────────────────────────────────────
 
 router.patch(
   "/stock-purchases/:id",
 
   async (req, res): Promise<void> => {
-    const params =
-      GetStockPurchaseParams.safeParse(
-        req.params,
-      );
+    const params = GetStockPurchaseParams.safeParse(req.params);
 
     if (!params.success) {
       res.status(400).json({
@@ -845,10 +569,7 @@ router.patch(
       return;
     }
 
-    const body =
-      UpdateStockPurchaseBody.safeParse(
-        req.body,
-      );
+    const body = UpdateStockPurchaseBody.safeParse(req.body);
 
     if (!body.success) {
       res.status(400).json({
@@ -859,460 +580,264 @@ router.patch(
     }
 
     try {
-      const result = await db.transaction(
-        async (tx) => {
-          const [purchase] =
-            await tx
-              .select()
-              .from(stockPurchasesTable)
-              .where(
-                eq(
-                  stockPurchasesTable.id,
-                  params.data.id,
-                ),
-              );
+      const result = await db.transaction(async (tx) => {
+        const [purchase] = await tx
+          .select()
+          .from(stockPurchasesTable)
+          .where(eq(stockPurchasesTable.id, params.data.id));
 
-          if (!purchase) {
-            throw new Error(
-              "Stock purchase not found",
-            );
-          }
+        if (!purchase) {
+          throw new Error("Stock purchase not found");
+        }
 
-          /**
-           * Only the new lightweight group-based
-           * purchase model is editable.
-           *
-           * Historical product-level purchases remain
-           * readable but should not be rewritten through
-           * the new procurement form.
-           */
-          const existingGroups =
-            await tx
-              .select()
-              .from(stockPurchaseGroupsTable)
-              .where(
-                eq(
-                  stockPurchaseGroupsTable.purchaseId,
-                  purchase.id,
-                ),
-              );
+        /**
+         * Only the new lightweight group-based
+         * purchase model is editable.
+         *
+         * Historical product-level purchases remain
+         * readable but should not be rewritten through
+         * the new procurement form.
+         */
+        const existingGroups = await tx
+          .select()
+          .from(stockPurchaseGroupsTable)
+          .where(eq(stockPurchaseGroupsTable.purchaseId, purchase.id));
 
-          if (existingGroups.length === 0) {
-            throw new Error(
-              "Historical purchases cannot be edited with the new purchase form",
-            );
-          }
-
-          const sharedCostsTotal =
-            roundMoney(
-              body.data.sharedCosts.reduce(
-                (sum, cost) =>
-                  sum + cost.amount,
-                0,
-              ),
-            );
-
-          const goodsTotal =
-            roundMoney(
-              body.data.goodsTotal,
-            );
-
-          const totalCost =
-            roundMoney(
-              goodsTotal +
-                sharedCostsTotal,
-            );
-
-          const totalQuantity =
-            body.data.stockGroups.reduce(
-              (sum, group) =>
-                sum + group.quantity,
-              0,
-            );
-
-          /**
-           * Preserve actual money already paid.
-           *
-           * If a supplier debt exists, its amountPaid is
-           * authoritative because later payments are
-           * recorded against that debt.
-           *
-           * If there is no debt, the purchase's original
-           * amountPaid is the amount that was paid when
-           * the purchase was created.
-           */
-          let amountAlreadyPaid =
-            Number(purchase.amountPaid);
-
-          let linkedDebt:
-            | typeof supplierDebtsTable.$inferSelect
-            | undefined;
-
-          if (purchase.supplierDebtId) {
-            const [debt] =
-              await tx
-                .select()
-                .from(supplierDebtsTable)
-                .where(
-                  eq(
-                    supplierDebtsTable.id,
-                    purchase.supplierDebtId,
-                  ),
-                );
-
-            linkedDebt = debt;
-
-            if (debt) {
-              amountAlreadyPaid =
-                Number(debt.amountPaid);
-            }
-          }
-
-          amountAlreadyPaid =
-            roundMoney(
-              amountAlreadyPaid,
-            );
-
-          if (
-            totalCost <
-            amountAlreadyPaid
-          ) {
-            throw new Error(
-              `Purchase total cannot be lower than the amount already paid (${moneyString(
-                amountAlreadyPaid,
-              )})`,
-            );
-          }
-
-          const supplierBalance =
-            roundMoney(
-              totalCost -
-                amountAlreadyPaid,
-            );
-
-          const purchaseDate =
-            new Date(
-              body.data.purchaseDate,
-            );
-
-          if (
-            Number.isNaN(
-              purchaseDate.getTime(),
-            )
-          ) {
-            throw new Error(
-              "Invalid purchase date",
-            );
-          }
-
-          /**
-           * Replace lightweight stock groups and shared
-           * costs with the edited values.
-           */
-          await tx
-            .delete(
-              stockPurchaseGroupsTable,
-            )
-            .where(
-              eq(
-                stockPurchaseGroupsTable.purchaseId,
-                purchase.id,
-              ),
-            );
-
-          await tx
-            .delete(
-              stockPurchaseCostsTable,
-            )
-            .where(
-              eq(
-                stockPurchaseCostsTable.purchaseId,
-                purchase.id,
-              ),
-            );
-
-          await tx.insert(
-            stockPurchaseGroupsTable,
-          ).values(
-            body.data.stockGroups.map(
-              (group) => ({
-                purchaseId:
-                  purchase.id,
-
-                category:
-                  group.category,
-
-                quantity:
-                  group.quantity,
-
-                description:
-                  group.description ||
-                  null,
-              }),
-            ),
+        if (existingGroups.length === 0) {
+          throw new Error(
+            "Historical purchases cannot be edited with the new purchase form",
           );
+        }
 
-          if (
-            body.data.sharedCosts.length >
-            0
-          ) {
-            await tx.insert(
-              stockPurchaseCostsTable,
-            ).values(
-              body.data.sharedCosts.map(
-                (cost) => ({
-                  purchaseId:
-                    purchase.id,
+        const sharedCostsTotal = roundMoney(
+          body.data.sharedCosts.reduce((sum, cost) => sum + cost.amount, 0),
+        );
 
-                  label: cost.label,
+        const goodsTotal = roundMoney(
+          body.data.stockGroups.reduce(
+            (sum, group) => sum + group.quantity * group.unitBuyingPrice,
+            0,
+          ),
+        );
 
-                  amount:
-                    moneyString(
-                      cost.amount,
-                    ),
-                }),
-              ),
-            );
+        const totalCost = roundMoney(goodsTotal + sharedCostsTotal);
+
+        const totalQuantity = body.data.stockGroups.reduce(
+          (sum, group) => sum + group.quantity,
+          0,
+        );
+
+        /**
+         * Preserve actual money already paid.
+         *
+         * If a supplier debt exists, its amountPaid is
+         * authoritative because later payments are
+         * recorded against that debt.
+         *
+         * If there is no debt, the purchase's original
+         * amountPaid is the amount that was paid when
+         * the purchase was created.
+         */
+        let amountAlreadyPaid = Number(purchase.amountPaid);
+
+        let linkedDebt: typeof supplierDebtsTable.$inferSelect | undefined;
+
+        if (purchase.supplierDebtId) {
+          const [debt] = await tx
+            .select()
+            .from(supplierDebtsTable)
+            .where(eq(supplierDebtsTable.id, purchase.supplierDebtId));
+
+          linkedDebt = debt;
+
+          if (debt) {
+            amountAlreadyPaid = Number(debt.amountPaid);
           }
+        }
 
+        amountAlreadyPaid = roundMoney(amountAlreadyPaid);
+
+        if (totalCost < amountAlreadyPaid) {
+          throw new Error(
+            `Purchase total cannot be lower than the amount already paid (${moneyString(
+              amountAlreadyPaid,
+            )})`,
+          );
+        }
+
+        const supplierBalance = roundMoney(totalCost - amountAlreadyPaid);
+
+        const purchaseDate = new Date(body.data.purchaseDate);
+
+        if (Number.isNaN(purchaseDate.getTime())) {
+          throw new Error("Invalid purchase date");
+        }
+
+        /**
+         * Replace lightweight stock groups and shared
+         * costs with the edited values.
+         */
+        await tx
+          .delete(stockPurchaseGroupsTable)
+          .where(eq(stockPurchaseGroupsTable.purchaseId, purchase.id));
+
+        await tx
+          .delete(stockPurchaseCostsTable)
+          .where(eq(stockPurchaseCostsTable.purchaseId, purchase.id));
+
+        await tx.insert(stockPurchaseGroupsTable).values(
+          body.data.stockGroups.map((group) => ({
+            purchaseId: purchase.id,
+
+            category: group.category,
+
+            quantity: group.quantity,
+
+            unitBuyingPrice: moneyString(group.unitBuyingPrice),
+
+            description: group.description || null,
+          })),
+        );
+
+        if (body.data.sharedCosts.length > 0) {
+          await tx.insert(stockPurchaseCostsTable).values(
+            body.data.sharedCosts.map((cost) => ({
+              purchaseId: purchase.id,
+
+              label: cost.label,
+
+              amount: moneyString(cost.amount),
+            })),
+          );
+        }
+
+        /**
+         * Keep the purchase's cached amountPaid aligned
+         * with the authoritative cumulative amount.
+         */
+        await tx
+          .update(stockPurchasesTable)
+          .set({
+            supplierName: body.data.supplierName,
+
+            supplierPhone: body.data.supplierPhone || null,
+
+            purchaseDate,
+
+            goodsTotal: moneyString(goodsTotal),
+
+            sharedCostsTotal: moneyString(sharedCostsTotal),
+
+            totalCost: moneyString(totalCost),
+
+            amountPaid: moneyString(amountAlreadyPaid),
+
+            reference: body.data.reference || null,
+
+            notes: body.data.notes || null,
+          })
+          .where(eq(stockPurchasesTable.id, purchase.id));
+
+        let supplierDebtId = purchase.supplierDebtId;
+
+        if (linkedDebt) {
           /**
-           * Keep the purchase's cached amountPaid aligned
-           * with the authoritative cumulative amount.
+           * Keep the debt even when the new balance is
+           * zero so its payment history remains intact.
            */
+          await tx
+            .update(supplierDebtsTable)
+            .set({
+              supplierName: body.data.supplierName,
+
+              phone: body.data.supplierPhone || null,
+
+              description: `Stock purchase ${
+                purchase.purchaseNumber ?? `#${purchase.id}`
+              }`,
+
+              amount: moneyString(totalCost),
+
+              amountPaid: moneyString(amountAlreadyPaid),
+            })
+            .where(eq(supplierDebtsTable.id, linkedDebt.id));
+        } else if (supplierBalance > 0) {
+          /**
+           * A previously fully-paid purchase became more
+           * expensive after editing. Create a debt only
+           * for the newly outstanding purchase total.
+           *
+           * No payment-history row is created here:
+           * amountAlreadyPaid represents money that was
+           * already paid before this debt existed.
+           */
+          const [debt] = await tx
+            .insert(supplierDebtsTable)
+            .values({
+              supplierName: body.data.supplierName,
+
+              description: `Stock purchase ${
+                purchase.purchaseNumber ?? `#${purchase.id}`
+              }`,
+
+              amount: moneyString(totalCost),
+
+              amountPaid: moneyString(amountAlreadyPaid),
+
+              notes: body.data.notes || "",
+            })
+            .returning();
+
+          supplierDebtId = debt.id;
+
           await tx
             .update(stockPurchasesTable)
             .set({
-              supplierName:
-                body.data.supplierName,
-
-              supplierPhone:
-                body.data.supplierPhone ||
-                null,
-
-              purchaseDate,
-
-              goodsTotal:
-                moneyString(
-                  goodsTotal,
-                ),
-
-              sharedCostsTotal:
-                moneyString(
-                  sharedCostsTotal,
-                ),
-
-              totalCost:
-                moneyString(
-                  totalCost,
-                ),
-
-              amountPaid:
-                moneyString(
-                  amountAlreadyPaid,
-                ),
-
-              reference:
-                body.data.reference ||
-                null,
-
-              notes:
-                body.data.notes ||
-                null,
+              supplierDebtId: debt.id,
             })
-            .where(
-              eq(
-                stockPurchasesTable.id,
-                purchase.id,
-              ),
-            );
+            .where(eq(stockPurchasesTable.id, purchase.id));
+        }
 
-          let supplierDebtId =
-            purchase.supplierDebtId;
+        const [updatedPurchase] = await tx
+          .select()
+          .from(stockPurchasesTable)
+          .where(eq(stockPurchasesTable.id, purchase.id));
 
-          if (linkedDebt) {
-            /**
-             * Keep the debt even when the new balance is
-             * zero so its payment history remains intact.
-             */
-            await tx
-              .update(
-                supplierDebtsTable,
-              )
-              .set({
-                supplierName:
-                  body.data.supplierName,
+        const updatedGroups = await tx
+          .select()
+          .from(stockPurchaseGroupsTable)
+          .where(eq(stockPurchaseGroupsTable.purchaseId, purchase.id));
 
-                phone:
-                  body.data.supplierPhone ||
-                  null,
+        const updatedCosts = await tx
+          .select()
+          .from(stockPurchaseCostsTable)
+          .where(eq(stockPurchaseCostsTable.purchaseId, purchase.id));
 
-                description:
-                  `Stock purchase ${
-                    purchase.purchaseNumber ??
-                    `#${purchase.id}`
-                  }`,
+        const legacyRows = await tx
+          .select({
+            item: stockPurchaseItemsTable,
+            productName: productsTable.name,
+          })
+          .from(stockPurchaseItemsTable)
+          .leftJoin(
+            productsTable,
+            eq(stockPurchaseItemsTable.productId, productsTable.id),
+          )
+          .where(eq(stockPurchaseItemsTable.purchaseId, purchase.id));
 
-                amount:
-                  moneyString(
-                    totalCost,
-                  ),
-
-                amountPaid:
-                  moneyString(
-                    amountAlreadyPaid,
-                  ),
-              })
-              .where(
-                eq(
-                  supplierDebtsTable.id,
-                  linkedDebt.id,
-                ),
-              );
-          } else if (
-            supplierBalance > 0
-          ) {
-            /**
-             * A previously fully-paid purchase became more
-             * expensive after editing. Create a debt only
-             * for the newly outstanding purchase total.
-             *
-             * No payment-history row is created here:
-             * amountAlreadyPaid represents money that was
-             * already paid before this debt existed.
-             */
-            const [debt] =
-              await tx
-                .insert(
-                  supplierDebtsTable,
-                )
-                .values({
-                  supplierName:
-                    body.data.supplierName,
-
-                  description:
-                    `Stock purchase ${
-                      purchase.purchaseNumber ??
-                      `#${purchase.id}`
-                    }`,
-
-                  amount:
-                    moneyString(
-                      totalCost,
-                    ),
-
-                  amountPaid:
-                    moneyString(
-                      amountAlreadyPaid,
-                    ),
-
-                  notes:
-                    body.data.notes ||
-                    "",
-                })
-                .returning();
-
-            supplierDebtId =
-              debt.id;
-
-            await tx
-              .update(
-                stockPurchasesTable,
-              )
-              .set({
-                supplierDebtId:
-                  debt.id,
-              })
-              .where(
-                eq(
-                  stockPurchasesTable.id,
-                  purchase.id,
-                ),
-              );
-          }
-
-          const [updatedPurchase] =
-            await tx
-              .select()
-              .from(
-                stockPurchasesTable,
-              )
-              .where(
-                eq(
-                  stockPurchasesTable.id,
-                  purchase.id,
-                ),
-              );
-
-          const updatedGroups =
-            await tx
-              .select()
-              .from(
-                stockPurchaseGroupsTable,
-              )
-              .where(
-                eq(
-                  stockPurchaseGroupsTable.purchaseId,
-                  purchase.id,
-                ),
-              );
-
-          const updatedCosts =
-            await tx
-              .select()
-              .from(
-                stockPurchaseCostsTable,
-              )
-              .where(
-                eq(
-                  stockPurchaseCostsTable.purchaseId,
-                  purchase.id,
-                ),
-              );
-
-          const legacyRows =
-            await tx
-              .select({
-                item:
-                  stockPurchaseItemsTable,
-                productName:
-                  productsTable.name,
-              })
-              .from(
-                stockPurchaseItemsTable,
-              )
-              .leftJoin(
-                productsTable,
-                eq(
-                  stockPurchaseItemsTable.productId,
-                  productsTable.id,
-                ),
-              )
-              .where(
-                eq(
-                  stockPurchaseItemsTable.purchaseId,
-                  purchase.id,
-                ),
-              );
-
-          return mapPurchase(
-            {
-              ...updatedPurchase,
-              supplierDebtId,
-            },
-            updatedGroups.map(mapGroup),
-            updatedCosts.map(mapCost),
-            legacyRows.map(
-              ({ item, productName }) =>
-                mapLegacyItem(
-                  item,
-                  productName ??
-                    undefined,
-                ),
-            ),
-            supplierBalance,
-          );
-        },
-      );
+        return mapPurchase(
+          {
+            ...updatedPurchase,
+            supplierDebtId,
+          },
+          updatedGroups.map(mapGroup),
+          updatedCosts.map(mapCost),
+          legacyRows.map(({ item, productName }) =>
+            mapLegacyItem(item, productName ?? undefined),
+          ),
+          supplierBalance,
+        );
+      });
 
       res.json(result);
     } catch (error) {
@@ -1321,10 +846,7 @@ router.patch(
           ? error.message
           : "Failed to update stock purchase";
 
-      if (
-        message ===
-        "Stock purchase not found"
-      ) {
+      if (message === "Stock purchase not found") {
         res.status(404).json({
           error: message,
         });
@@ -1345,10 +867,7 @@ router.delete(
   "/stock-purchases/:id",
 
   async (req, res): Promise<void> => {
-    const params =
-      GetStockPurchaseParams.safeParse(
-        req.params,
-      );
+    const params = GetStockPurchaseParams.safeParse(req.params);
 
     if (!params.success) {
       res.status(400).json({
@@ -1359,76 +878,51 @@ router.delete(
     }
 
     try {
-      await db.transaction(
-        async (tx) => {
-          const [purchase] =
-            await tx
-              .select()
-              .from(
-                stockPurchasesTable,
-              )
-              .where(
-                eq(
-                  stockPurchasesTable.id,
-                  params.data.id,
-                ),
-              );
+      await db.transaction(async (tx) => {
+        const [purchase] = await tx
+          .select()
+          .from(stockPurchasesTable)
+          .where(eq(stockPurchasesTable.id, params.data.id));
 
-          if (!purchase) {
-            throw new Error(
-              "Stock purchase not found",
-            );
-          }
+        if (!purchase) {
+          throw new Error("Stock purchase not found");
+        }
 
-          const supplierDebtId =
-            purchase.supplierDebtId;
+        const supplierDebtId = purchase.supplierDebtId;
 
-          /**
-           * Delete the purchase first.
-           *
-           * PostgreSQL automatically removes:
-           * - stock_purchase_groups
-           * - stock_purchase_items (legacy)
-           * - stock_purchase_costs
-           *
-           * through their ON DELETE CASCADE
-           * relationships.
-           *
-           * The purchase only references the supplier
-           * debt with ON DELETE SET NULL, so deleting
-           * the purchase does not destroy the debt.
-           */
+        /**
+         * Delete the purchase first.
+         *
+         * PostgreSQL automatically removes:
+         * - stock_purchase_groups
+         * - stock_purchase_items (legacy)
+         * - stock_purchase_costs
+         *
+         * through their ON DELETE CASCADE
+         * relationships.
+         *
+         * The purchase only references the supplier
+         * debt with ON DELETE SET NULL, so deleting
+         * the purchase does not destroy the debt.
+         */
+        await tx
+          .delete(stockPurchasesTable)
+          .where(eq(stockPurchasesTable.id, purchase.id));
+
+        /**
+         * A supplier debt linked from a purchase was
+         * generated by that purchase, so remove it too.
+         *
+         * supplier_debt_payments uses ON DELETE CASCADE,
+         * therefore all payment-history rows belonging
+         * to this debt are removed automatically.
+         */
+        if (supplierDebtId) {
           await tx
-            .delete(stockPurchasesTable)
-            .where(
-              eq(
-                stockPurchasesTable.id,
-                purchase.id,
-              ),
-            );
-
-          /**
-           * A supplier debt linked from a purchase was
-           * generated by that purchase, so remove it too.
-           *
-           * supplier_debt_payments uses ON DELETE CASCADE,
-           * therefore all payment-history rows belonging
-           * to this debt are removed automatically.
-           */
-          if (supplierDebtId) {
-            await tx
-              .delete(
-                supplierDebtsTable,
-              )
-              .where(
-                eq(
-                  supplierDebtsTable.id,
-                  supplierDebtId,
-                ),
-              );
-          }
-        },
-      );
+            .delete(supplierDebtsTable)
+            .where(eq(supplierDebtsTable.id, supplierDebtId));
+        }
+      });
 
       res.status(204).send();
     } catch (error) {
@@ -1437,10 +931,7 @@ router.delete(
           ? error.message
           : "Failed to delete stock purchase";
 
-      if (
-        message ===
-        "Stock purchase not found"
-      ) {
+      if (message === "Stock purchase not found") {
         res.status(404).json({
           error: message,
         });

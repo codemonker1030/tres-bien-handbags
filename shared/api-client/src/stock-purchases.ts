@@ -12,6 +12,7 @@ import { apiGet, apiSend } from "./core";
 export interface CreateStockPurchaseGroup {
   category: string;
   quantity: number;
+  unitBuyingPrice: number;
   description?: string;
 }
 
@@ -49,6 +50,7 @@ export interface StockPurchaseGroup {
 
   category: string;
   quantity: number;
+  unitBuyingPrice: number;
 
   description?: string | null;
 
@@ -91,10 +93,7 @@ export interface StockPurchaseLegacyItem {
   createdAt: string;
 }
 
-export type StockPurchasePaymentStatus =
-  | "paid"
-  | "partially_paid"
-  | "unpaid";
+export type StockPurchasePaymentStatus = "paid" | "partially_paid" | "unpaid";
 
 export interface StockPurchase {
   id: number;
@@ -143,25 +142,18 @@ export interface StockPurchase {
 export const getListStockPurchasesQueryKey = () =>
   ["/api/stock-purchases"] as const;
 
-export const getGetStockPurchaseQueryKey = (
-  id: number,
-) => ["/api/stock-purchases", id] as const;
+export const getGetStockPurchaseQueryKey = (id: number) =>
+  ["/api/stock-purchases", id] as const;
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
 export function useListStockPurchases(options?: {
-  query?: Partial<
-    UseQueryOptions<StockPurchase[]>
-  >;
+  query?: Partial<UseQueryOptions<StockPurchase[]>>;
 }) {
   return useQuery({
-    queryKey:
-      getListStockPurchasesQueryKey(),
+    queryKey: getListStockPurchasesQueryKey(),
 
-    queryFn: () =>
-      apiGet<StockPurchase[]>(
-        "/stock-purchases",
-      ),
+    queryFn: () => apiGet<StockPurchase[]>("/stock-purchases"),
 
     ...options?.query,
   });
@@ -170,19 +162,13 @@ export function useListStockPurchases(options?: {
 export function useGetStockPurchase(
   id: number,
   options?: {
-    query?: Partial<
-      UseQueryOptions<StockPurchase>
-    >;
+    query?: Partial<UseQueryOptions<StockPurchase>>;
   },
 ) {
   return useQuery({
-    queryKey:
-      getGetStockPurchaseQueryKey(id),
+    queryKey: getGetStockPurchaseQueryKey(id),
 
-    queryFn: () =>
-      apiGet<StockPurchase>(
-        `/stock-purchases/${id}`,
-      ),
+    queryFn: () => apiGet<StockPurchase>(`/stock-purchases/${id}`),
 
     enabled: !!id,
 
@@ -192,59 +178,40 @@ export function useGetStockPurchase(
 
 // ─── Mutations ────────────────────────────────────────────────────────────────
 
-export function useCreateStockPurchase(
-  options?: {
-    mutation?: Partial<
-      UseMutationOptions<
-        StockPurchase,
-        Error,
-        {
-          data: CreateStockPurchaseInput;
-        }
-      >
-    >;
-  },
-) {
+export function useCreateStockPurchase(options?: {
+  mutation?: Partial<
+    UseMutationOptions<
+      StockPurchase,
+      Error,
+      {
+        data: CreateStockPurchaseInput;
+      }
+    >
+  >;
+}) {
   return useMutation({
-    mutationFn: ({
-      data,
-    }: {
-      data: CreateStockPurchaseInput;
-    }) =>
-      apiSend<StockPurchase>(
-        "/stock-purchases",
-        "POST",
-        data,
-      ),
+    mutationFn: ({ data }: { data: CreateStockPurchaseInput }) =>
+      apiSend<StockPurchase>("/stock-purchases", "POST", data),
 
     ...options?.mutation,
   });
 }
 // ─── Delete purchase ──────────────────────────────────────────────────────────
 
-export function useDeleteStockPurchase(
-  options?: {
-    mutation?: Partial<
-      UseMutationOptions<
-        void,
-        Error,
-        {
-          id: number;
-        }
-      >
-    >;
-  },
-) {
+export function useDeleteStockPurchase(options?: {
+  mutation?: Partial<
+    UseMutationOptions<
+      void,
+      Error,
+      {
+        id: number;
+      }
+    >
+  >;
+}) {
   return useMutation({
-    mutationFn: async ({
-      id,
-    }: {
-      id: number;
-    }) => {
-      await apiSend<void>(
-        `/stock-purchases/${id}`,
-        "DELETE",
-      );
+    mutationFn: async ({ id }: { id: number }) => {
+      await apiSend<void>(`/stock-purchases/${id}`, "DELETE");
     },
 
     ...options?.mutation,
@@ -269,20 +236,18 @@ export interface UpdateStockPurchaseInput {
   notes?: string;
 }
 
-export function useUpdateStockPurchase(
-  options?: {
-    mutation?: Partial<
-      UseMutationOptions<
-        StockPurchase,
-        Error,
-        {
-          id: number;
-          data: UpdateStockPurchaseInput;
-        }
-      >
-    >;
-  },
-) {
+export function useUpdateStockPurchase(options?: {
+  mutation?: Partial<
+    UseMutationOptions<
+      StockPurchase,
+      Error,
+      {
+        id: number;
+        data: UpdateStockPurchaseInput;
+      }
+    >
+  >;
+}) {
   return useMutation({
     mutationFn: ({
       id,
@@ -290,12 +255,7 @@ export function useUpdateStockPurchase(
     }: {
       id: number;
       data: UpdateStockPurchaseInput;
-    }) =>
-      apiSend<StockPurchase>(
-        `/stock-purchases/${id}`,
-        "PATCH",
-        data,
-      ),
+    }) => apiSend<StockPurchase>(`/stock-purchases/${id}`, "PATCH", data),
 
     ...options?.mutation,
   });

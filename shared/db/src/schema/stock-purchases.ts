@@ -147,17 +147,11 @@ export const stockPurchasesTable = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    uniqueIndex(
-      "stock_purchases_purchase_number_idx",
-    ).on(table.purchaseNumber),
+    uniqueIndex("stock_purchases_purchase_number_idx").on(table.purchaseNumber),
 
-    index(
-      "stock_purchases_purchase_date_idx",
-    ).on(table.purchaseDate),
+    index("stock_purchases_purchase_date_idx").on(table.purchaseDate),
 
-    index(
-      "stock_purchases_supplier_debt_id_idx",
-    ).on(table.supplierDebtId),
+    index("stock_purchases_supplier_debt_id_idx").on(table.supplierDebtId),
   ],
 );
 
@@ -191,6 +185,23 @@ export const stockPurchaseGroupsTable = pgTable(
     quantity: integer("quantity").notNull(),
 
     /**
+     * Supplier price for one unit in this stock group,
+     * before transport and other shared procurement costs.
+     *
+     * Example:
+     * 5 handbags bought at KSh 1,000 each -> 1000.00
+     *
+     * Shared costs are allocated separately when landed cost
+     * is calculated.
+     */
+    unitBuyingPrice: numeric("unit_buying_price", {
+      precision: 12,
+      scale: 2,
+    })
+      .notNull()
+      .default("0"),
+
+    /**
      * Optional short description only when useful.
      *
      * Example:
@@ -207,13 +218,9 @@ export const stockPurchaseGroupsTable = pgTable(
       .defaultNow(),
   },
   (table) => [
-    index(
-      "stock_purchase_groups_purchase_id_idx",
-    ).on(table.purchaseId),
+    index("stock_purchase_groups_purchase_id_idx").on(table.purchaseId),
 
-    index(
-      "stock_purchase_groups_category_idx",
-    ).on(table.category),
+    index("stock_purchase_groups_category_idx").on(table.category),
   ],
 );
 
@@ -258,13 +265,10 @@ export const stockPurchaseItemsTable = pgTable(
       scale: 2,
     }).notNull(),
 
-    allocatedSharedCost: numeric(
-      "allocated_shared_cost",
-      {
-        precision: 12,
-        scale: 2,
-      },
-    )
+    allocatedSharedCost: numeric("allocated_shared_cost", {
+      precision: 12,
+      scale: 2,
+    })
       .notNull()
       .default("0"),
 
@@ -285,13 +289,9 @@ export const stockPurchaseItemsTable = pgTable(
       .defaultNow(),
   },
   (table) => [
-    index(
-      "stock_purchase_items_purchase_id_idx",
-    ).on(table.purchaseId),
+    index("stock_purchase_items_purchase_id_idx").on(table.purchaseId),
 
-    index(
-      "stock_purchase_items_product_id_idx",
-    ).on(table.productId),
+    index("stock_purchase_items_product_id_idx").on(table.productId),
   ],
 );
 
@@ -334,24 +334,18 @@ export const stockPurchaseCostsTable = pgTable(
       .defaultNow(),
   },
   (table) => [
-    index(
-      "stock_purchase_costs_purchase_id_idx",
-    ).on(table.purchaseId),
+    index("stock_purchase_costs_purchase_id_idx").on(table.purchaseId),
   ],
 );
 
-export type StockPurchase =
-  typeof stockPurchasesTable.$inferSelect;
+export type StockPurchase = typeof stockPurchasesTable.$inferSelect;
 
-export type StockPurchaseGroup =
-  typeof stockPurchaseGroupsTable.$inferSelect;
+export type StockPurchaseGroup = typeof stockPurchaseGroupsTable.$inferSelect;
 
 /**
  * Legacy type retained while old product-level purchase records
  * remain readable.
  */
-export type StockPurchaseItem =
-  typeof stockPurchaseItemsTable.$inferSelect;
+export type StockPurchaseItem = typeof stockPurchaseItemsTable.$inferSelect;
 
-export type StockPurchaseCost =
-  typeof stockPurchaseCostsTable.$inferSelect;
+export type StockPurchaseCost = typeof stockPurchaseCostsTable.$inferSelect;
