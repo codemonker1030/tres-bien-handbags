@@ -153,14 +153,62 @@ export const AllocatePurchaseGroupParams = zod.object({
   groupId: zod.coerce.number().int().positive(),
 });
 
-export const AllocatePurchaseGroupBody = zod.object({
-  productId: zod.number().int().positive(),
+export const PurchaseSizeAllocation = zod.object({
+  size: zod.string().trim().min(1),
   quantity: zod.number().int().positive(),
 });
 
-export type AllocatePurchaseGroupInput =
-  zod.infer<typeof AllocatePurchaseGroupBody>;
+export const AllocatePurchaseGroupBody = zod
+  .object({
+    productId: zod.number().int().positive(),
+    quantity: zod.number().int().positive(),
 
+    /**
+     * Optional per-size breakdown for size-based products.
+     *
+     * `quantity` remains the authoritative allocation total and must equal
+     * the sum of these entries when a size breakdown is supplied.
+     */
+    sizeQuantities: zod.array(PurchaseSizeAllocation).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.sizeQuantities || value.sizeQuantities.length === 0) {
+      return;
+    }
+
+    const seen = new Set<string>();
+
+    for (const entry of value.sizeQuantities) {
+      const normalized = entry.size.trim().toLowerCase();
+
+      if (seen.has(normalized)) {
+        ctx.addIssue({
+          code: zod.ZodIssueCode.custom,
+          path: ["sizeQuantities"],
+          message: `Size "${entry.size}" appears more than once`,
+        });
+      }
+
+      seen.add(normalized);
+    }
+
+    const sizeTotal = value.sizeQuantities.reduce(
+      (sum, entry) => sum + entry.quantity,
+      0,
+    );
+
+    if (sizeTotal !== value.quantity) {
+      ctx.addIssue({
+        code: zod.ZodIssueCode.custom,
+        path: ["sizeQuantities"],
+        message: `Size quantities total ${sizeTotal}, but allocation quantity is ${value.quantity}`,
+      });
+    }
+  });
+
+export type AllocatePurchaseGroupInput = zod.infer<
+  typeof AllocatePurchaseGroupBody
+>;
 
 // ─── Response: additional cost ────────────────────────────────────────────────
 
@@ -186,6 +234,10 @@ export const StockPurchaseGroupResponse = zod.object({
   category: zod.string(),
 
   quantity: zod.number(),
+
+  allocatedQuantity: zod.number(),
+
+  availableQuantity: zod.number(),
 
   unitBuyingPrice: zod.number(),
 

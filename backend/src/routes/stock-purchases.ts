@@ -75,9 +75,18 @@ function mapCost(cost: typeof stockPurchaseCostsTable.$inferSelect) {
   };
 }
 
-function mapGroup(group: typeof stockPurchaseGroupsTable.$inferSelect) {
+function mapGroup(
+  group: typeof stockPurchaseGroupsTable.$inferSelect,
+  allocatedQuantity = 0,
+) {
+  const allocated = Math.max(0, Math.min(group.quantity, allocatedQuantity));
+
   return {
     ...group,
+
+    allocatedQuantity: allocated,
+
+    availableQuantity: group.quantity - allocated,
 
     unitBuyingPrice: Number(group.unitBuyingPrice),
 
@@ -222,6 +231,33 @@ async function loadPurchaseDetails(
     .where(eq(stockPurchaseCostsTable.purchaseId, purchase.id));
 
   /**
+   * Cost layers are also the allocation ledger.
+   *
+   * Aggregate all allocations for this purchase in one query so every
+   * stock group can expose how many units have entered Inventory and
+   * how many are still available.
+   */
+  const allocationRows = await db
+    .select({
+      groupId: inventoryCostLayersTable.purchaseGroupId,
+
+      allocatedQuantity: sql<number>`coalesce(sum(${inventoryCostLayersTable.quantityReceived}), 0)::int`,
+    })
+    .from(inventoryCostLayersTable)
+    .innerJoin(
+      stockPurchaseGroupsTable,
+      eq(inventoryCostLayersTable.purchaseGroupId, stockPurchaseGroupsTable.id),
+    )
+    .where(eq(stockPurchaseGroupsTable.purchaseId, purchase.id))
+    .groupBy(inventoryCostLayersTable.purchaseGroupId);
+
+  const allocatedByGroup = new Map(
+    allocationRows
+      .filter((row) => row.groupId != null)
+      .map((row) => [Number(row.groupId), Number(row.allocatedQuantity)]),
+  );
+
+  /**
    * Historical product-level rows.
    *
    * LEFT JOIN is intentional:
@@ -245,7 +281,9 @@ async function loadPurchaseDetails(
   return mapPurchase(
     purchase,
 
-    groupRows.map(mapGroup),
+    groupRows.map((group) =>
+      mapGroup(group, allocatedByGroup.get(group.id) ?? 0),
+    ),
 
     costRows.map(mapCost),
 
@@ -585,6 +623,7 @@ router.post(
         const groupId = params.data.groupId;
         const productId = body.data.productId;
         const quantity = body.data.quantity;
+        const requestedSizeQuantities = body.data.sizeQuantities;
 
         /**
          * Serialize allocations for this purchase group.
@@ -627,16 +666,64 @@ router.post(
         }
 
         /**
-         * Size-based products require allocation into individual sizes.
-         * Updating only products.stock would make their size breakdown
-         * disagree with the authoritative total.
+         * Size-based Inventory must keep products.stock and the per-size
+         * breakdown synchronized.
+         *
+         * A product with an existing size breakdown therefore requires the
+         * incoming purchase allocation to include its own size breakdown.
          */
+        const existingSizeQuantities = Array.isArray(product.sizeQuantities)
+          ? product.sizeQuantities
+          : [];
+
+        const isSizeBasedProduct = existingSizeQuantities.length > 0;
+
         if (
-          Array.isArray(product.sizeQuantities) &&
-          product.sizeQuantities.length > 0
+          isSizeBasedProduct &&
+          (!requestedSizeQuantities || requestedSizeQuantities.length === 0)
         ) {
           throw new Error(
-            "Size-based inventory cannot be allocated through this workflow yet",
+            "Choose how many purchased units belong to each size before adding this stock",
+          );
+        }
+
+        if (
+          !isSizeBasedProduct &&
+          requestedSizeQuantities &&
+          requestedSizeQuantities.length > 0
+        ) {
+          throw new Error(
+            "Size quantities can only be allocated to a size-based Inventory product",
+          );
+        }
+
+        const mergedSizeQuantities = isSizeBasedProduct
+          ? existingSizeQuantities.map((existing) => {
+              const incoming = requestedSizeQuantities?.find(
+                (entry) =>
+                  entry.size.trim().toLowerCase() ===
+                  existing.size.trim().toLowerCase(),
+              );
+
+              return {
+                size: existing.size,
+                quantity: existing.quantity + (incoming?.quantity ?? 0),
+              };
+            })
+          : undefined;
+
+        if (
+          requestedSizeQuantities?.some(
+            (incoming) =>
+              !existingSizeQuantities.some(
+                (existing) =>
+                  existing.size.trim().toLowerCase() ===
+                  incoming.size.trim().toLowerCase(),
+              ),
+          )
+        ) {
+          throw new Error(
+            "Purchase allocation contains a size that is not configured for this product",
           );
         }
 
@@ -705,6 +792,12 @@ router.post(
           .update(productsTable)
           .set({
             stock: sql`${productsTable.stock} + ${quantity}`,
+
+            ...(mergedSizeQuantities
+              ? {
+                  sizeQuantities: mergedSizeQuantities,
+                }
+              : {}),
           })
           .where(eq(productsTable.id, product.id))
           .returning();

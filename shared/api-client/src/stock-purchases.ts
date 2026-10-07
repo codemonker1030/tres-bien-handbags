@@ -50,6 +50,10 @@ export interface StockPurchaseGroup {
 
   category: string;
   quantity: number;
+
+  allocatedQuantity: number;
+  availableQuantity: number;
+
   unitBuyingPrice: number;
 
   description?: string | null;
@@ -256,6 +260,78 @@ export function useUpdateStockPurchase(options?: {
       id: number;
       data: UpdateStockPurchaseInput;
     }) => apiSend<StockPurchase>(`/stock-purchases/${id}`, "PATCH", data),
+
+    ...options?.mutation,
+  });
+}
+
+// ─── Allocate purchased stock to Inventory ───────────────────────────────────
+
+export interface PurchaseSizeAllocation {
+  size: string;
+  quantity: number;
+}
+
+export interface AllocatePurchaseGroupInput {
+  productId: number;
+  quantity: number;
+
+  /**
+   * Required by the backend when allocating into a size-based product.
+   * The quantities must sum exactly to `quantity`.
+   */
+  sizeQuantities?: PurchaseSizeAllocation[];
+}
+
+export interface AllocatePurchaseGroupResult {
+  product: {
+    id: number;
+    name: string;
+    stock: number;
+  };
+
+  allocation: {
+    purchaseGroupId: number;
+    quantityAllocated: number;
+    quantityPreviouslyAllocated: number;
+    quantityRemaining: number;
+  };
+
+  costLayer: {
+    id: number;
+    quantityReceived: number;
+    quantityRemaining: number;
+    unitGoodsCost: number;
+    unitSharedCost: number;
+    landedUnitCost: number;
+  };
+}
+
+export function useAllocatePurchaseGroup(options?: {
+  mutation?: Partial<
+    UseMutationOptions<
+      AllocatePurchaseGroupResult,
+      Error,
+      {
+        groupId: number;
+        data: AllocatePurchaseGroupInput;
+      }
+    >
+  >;
+}) {
+  return useMutation({
+    mutationFn: ({
+      groupId,
+      data,
+    }: {
+      groupId: number;
+      data: AllocatePurchaseGroupInput;
+    }) =>
+      apiSend<AllocatePurchaseGroupResult>(
+        `/stock-purchases/groups/${groupId}/allocate`,
+        "POST",
+        data,
+      ),
 
     ...options?.mutation,
   });

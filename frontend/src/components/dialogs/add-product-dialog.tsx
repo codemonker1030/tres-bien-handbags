@@ -2,19 +2,44 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useCreateProduct, getListProductsQueryKey } from "@workspace/api-client";
+import {
+  useCreateProduct,
+  getListProductsQueryKey,
+} from "@workspace/api-client";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Upload, X, Loader2, Check, ChevronLeft, ChevronRight, Package, Plus,
+  Upload,
+  X,
+  Loader2,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Package,
+  Plus,
 } from "lucide-react";
 
 import {
-  CATEGORY_TEMPLATES, sumSizeQuantities,
-  type CategoryTemplate, type SizeQuantity,
+  CATEGORY_TEMPLATES,
+  sumSizeQuantities,
+  type CategoryTemplate,
+  type SizeQuantity,
 } from "@/lib/category-templates";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -25,12 +50,7 @@ import { cn } from "@/lib/utils";
 // ─── step plan — varies by category, since not every template needs a
 // dedicated Variants step (accessories has neither color variants nor
 // per-size stock) ──────────────────────────────────────────────────────────
-type StepKey =
-  | "category"
-  | "images"
-  | "details"
-  | "inventory"
-  | "review";
+type StepKey = "category" | "images" | "details" | "inventory" | "review";
 
 const STEP_META: Record<StepKey, string> = {
   category: "Category",
@@ -40,18 +60,10 @@ const STEP_META: Record<StepKey, string> = {
   review: "Review",
 };
 
-function buildSteps(
-  template: CategoryTemplate | null,
-): StepKey[] {
+function buildSteps(template: CategoryTemplate | null): StepKey[] {
   if (!template) return ["category"];
 
-  return [
-    "category",
-    "images",
-    "details",
-    "inventory",
-    "review",
-  ];
+  return ["category", "images", "details", "inventory", "review"];
 }
 
 // ─── form schema — a superset of every template's fields; each template
@@ -60,9 +72,7 @@ const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   brand: z.string().optional(),
   description: z.string().optional(),
-  buyingPrice: z.coerce
-    .number()
-    .min(0, "Buying price cannot be negative"),
+  buyingPrice: z.coerce.number().min(0, "Buying price cannot be negative"),
   price: z.coerce.number().min(0.01, "Selling price is required"),
   material: z.string().optional(),
   color: z.string().optional(),
@@ -95,13 +105,34 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const defaultValues: FormValues = {
-  name: "", brand: "", description: "",
-  buyingPrice: 0, price: 0,
-  material: "", color: "", style: "", closureType: "", compartments: undefined,
-  pattern: "", sleeveType: "", fit: "", season: "", shoeType: "",
-  accessoryType: "", clothingType: "", gender: "", heelType: "",
-  length: "", neckline: "", occasion: "", strapType: "", toeStyle: "",
-  stock: 0, lowStockThreshold: 5, sku: "", barcode: "",
+  name: "",
+  brand: "",
+  description: "",
+  buyingPrice: 0,
+  price: 0,
+  material: "",
+  color: "",
+  style: "",
+  closureType: "",
+  compartments: undefined,
+  pattern: "",
+  sleeveType: "",
+  fit: "",
+  season: "",
+  shoeType: "",
+  accessoryType: "",
+  clothingType: "",
+  gender: "",
+  heelType: "",
+  length: "",
+  neckline: "",
+  occasion: "",
+  strapType: "",
+  toeStyle: "",
+  stock: 0,
+  lowStockThreshold: 5,
+  sku: "",
+  barcode: "",
 };
 
 interface ImageEntry {
@@ -113,7 +144,13 @@ interface ImageEntry {
 }
 
 // ─── step indicator — dot-per-step, length varies by category ──────────────
-function StepIndicator({ steps, currentIndex }: { steps: StepKey[]; currentIndex: number }) {
+function StepIndicator({
+  steps,
+  currentIndex,
+}: {
+  steps: StepKey[];
+  currentIndex: number;
+}) {
   return (
     <div className="flex items-center gap-1">
       {steps.map((key, i) => {
@@ -124,10 +161,16 @@ function StepIndicator({ steps, currentIndex }: { steps: StepKey[]; currentIndex
             <div
               className={cn(
                 "flex items-center justify-center w-2 h-2 rounded-full shrink-0 transition-all",
-                isDone ? "bg-primary w-2" : isActive ? "bg-primary w-5" : "bg-muted",
+                isDone
+                  ? "bg-primary w-2"
+                  : isActive
+                    ? "bg-primary w-5"
+                    : "bg-muted",
               )}
             />
-            {i < steps.length - 1 && <div className="h-px flex-1 bg-transparent" />}
+            {i < steps.length - 1 && (
+              <div className="h-px flex-1 bg-transparent" />
+            )}
           </React.Fragment>
         );
       })}
@@ -137,8 +180,14 @@ function StepIndicator({ steps, currentIndex }: { steps: StepKey[]; currentIndex
 
 // ─── generic tag-chip input (used for color variants) ──────────────────────
 function TagListInput({
-  value, onChange, placeholder,
-}: { value: string[]; onChange: (v: string[]) => void; placeholder: string }) {
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+  placeholder: string;
+}) {
   const [draft, setDraft] = useState("");
 
   const add = () => {
@@ -153,17 +202,31 @@ function TagListInput({
         <Input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(); } }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              add();
+            }
+          }}
           placeholder={placeholder}
         />
-        <Button type="button" variant="outline" onClick={add}><Plus className="w-4 h-4" /></Button>
+        <Button type="button" variant="outline" onClick={add}>
+          <Plus className="w-4 h-4" />
+        </Button>
       </div>
       {value.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {value.map((v) => (
-            <span key={v} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground">
+            <span
+              key={v}
+              className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground"
+            >
               {v}
-              <button type="button" onClick={() => onChange(value.filter((x) => x !== v))} className="hover:text-destructive">
+              <button
+                type="button"
+                onClick={() => onChange(value.filter((x) => x !== v))}
+                className="hover:text-destructive"
+              >
                 <X className="w-3 h-3" />
               </button>
             </span>
@@ -176,9 +239,16 @@ function TagListInput({
 
 // ─── size × quantity table (dresses, shoes) — preset sizes, live total ─────
 function SizeQuantityTable({
-  sizeOptions, value, onChange,
-}: { sizeOptions: string[]; value: SizeQuantity[]; onChange: (v: SizeQuantity[]) => void }) {
-  const getQty = (size: string) => value.find((v) => v.size === size)?.quantity ?? 0;
+  sizeOptions,
+  value,
+  onChange,
+}: {
+  sizeOptions: string[];
+  value: SizeQuantity[];
+  onChange: (v: SizeQuantity[]) => void;
+}) {
+  const getQty = (size: string) =>
+    value.find((v) => v.size === size)?.quantity ?? 0;
   const setQty = (size: string, quantity: number) => {
     const next = value.filter((v) => v.size !== size);
     if (quantity > 0) next.push({ size, quantity });
@@ -190,13 +260,20 @@ function SizeQuantityTable({
     <div className="space-y-2">
       <div className="grid grid-cols-2 gap-2">
         {sizeOptions.map((size) => (
-          <div key={size} className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5">
-            <span className="text-sm font-semibold text-foreground w-10 shrink-0">{size}</span>
+          <div
+            key={size}
+            className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5"
+          >
+            <span className="text-sm font-semibold text-foreground w-10 shrink-0">
+              {size}
+            </span>
             <Input
               type="number"
               min={0}
               value={getQty(size) || ""}
-              onChange={(e) => setQty(size, Math.max(0, parseInt(e.target.value, 10) || 0))}
+              onChange={(e) =>
+                setQty(size, Math.max(0, parseInt(e.target.value, 10) || 0))
+              }
               placeholder="0"
               className="h-8"
             />
@@ -213,8 +290,12 @@ function SizeQuantityTable({
 
 // ─── image dropzone step (unchanged from the previous version) ─────────────
 function ImageStep({
-  images, setImages,
-}: { images: ImageEntry[]; setImages: React.Dispatch<React.SetStateAction<ImageEntry[]>> }) {
+  images,
+  setImages,
+}: {
+  images: ImageEntry[];
+  setImages: React.Dispatch<React.SetStateAction<ImageEntry[]>>;
+}) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -224,7 +305,10 @@ function ImageStep({
       const formData = new FormData();
       formData.append("image", file);
 
-      const apiBaseUrl = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
+      const apiBaseUrl = (import.meta.env.VITE_API_URL ?? "").replace(
+        /\/+$/,
+        "",
+      );
 
       const res = await fetch(`${apiBaseUrl}/api/uploads`, {
         method: "POST",
@@ -233,9 +317,7 @@ function ImageStep({
 
       if (!res.ok) {
         const message = await res.text().catch(() => "");
-        throw new Error(
-          message || `Upload failed with status ${res.status}`,
-        );
+        throw new Error(message || `Upload failed with status ${res.status}`);
       }
 
       const { url } = await res.json();
@@ -269,9 +351,7 @@ function ImageStep({
       toast({
         title: "One image failed to upload",
         description:
-          error instanceof Error
-            ? error.message
-            : "Unable to upload image",
+          error instanceof Error ? error.message : "Unable to upload image",
         variant: "destructive",
       });
     }
@@ -279,7 +359,9 @@ function ImageStep({
 
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const validFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    const validFiles = Array.from(files).filter((f) =>
+      f.type.startsWith("image/"),
+    );
     const newEntries: ImageEntry[] = validFiles.map((file) => ({
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       previewUrl: URL.createObjectURL(file),
@@ -300,33 +382,56 @@ function ImageStep({
   return (
     <div className="space-y-3">
       <div
-        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragging(true);
+        }}
         onDragLeave={() => setIsDragging(false)}
-        onDrop={(e) => { e.preventDefault(); setIsDragging(false); handleFiles(e.dataTransfer.files); }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragging(false);
+          handleFiles(e.dataTransfer.files);
+        }}
         onClick={() => fileInputRef.current?.click()}
         className={cn(
           "rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2 py-10 cursor-pointer transition-colors",
-          isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/30",
+          isDragging
+            ? "border-primary bg-primary/5"
+            : "border-border hover:border-primary/50 hover:bg-muted/30",
         )}
       >
         <Upload className="w-8 h-8 text-muted-foreground" />
-        <p className="text-sm font-medium text-foreground">Drag & drop photos here</p>
-        <p className="text-xs text-muted-foreground">or click to browse · JPG, PNG, WebP · max 5MB each</p>
+        <p className="text-sm font-medium text-foreground">
+          Drag & drop photos here
+        </p>
+        <p className="text-xs text-muted-foreground">
+          or click to browse · JPG, PNG, WebP · max 5MB each
+        </p>
         <input
           ref={fileInputRef}
           type="file"
           accept="image/*"
           multiple
           className="hidden"
-          onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }}
+          onChange={(e) => {
+            handleFiles(e.target.files);
+            e.target.value = "";
+          }}
         />
       </div>
 
       {images.length > 0 && (
         <div className="grid grid-cols-4 gap-2">
           {images.map((img, i) => (
-            <div key={img.id} className="relative aspect-square rounded-xl overflow-hidden border border-border bg-muted group">
-              <img src={img.previewUrl} alt="" className="w-full h-full object-cover" />
+            <div
+              key={img.id}
+              className="relative aspect-square rounded-xl overflow-hidden border border-border bg-muted group"
+            >
+              <img
+                src={img.previewUrl}
+                alt=""
+                className="w-full h-full object-cover"
+              />
               {i === 0 && !img.uploading && !img.error && (
                 <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-black/60 text-white">
                   Cover
@@ -339,7 +444,9 @@ function ImageStep({
               )}
               {img.error && (
                 <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center">
-                  <span className="text-[10px] font-semibold text-red-600 bg-white/90 px-1.5 py-0.5 rounded">Failed</span>
+                  <span className="text-[10px] font-semibold text-red-600 bg-white/90 px-1.5 py-0.5 rounded">
+                    Failed
+                  </span>
                 </div>
               )}
               <button
@@ -360,9 +467,28 @@ function ImageStep({
 interface AddProductDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+
+  purchaseMode?: {
+    category: string;
+    quantity: number;
+    landedUnitCost: number;
+  };
+
+  onProductCreated?: (
+    productId: number,
+    allocation?: {
+      quantity: number;
+      sizeQuantities?: SizeQuantity[];
+    },
+  ) => void;
 }
 
-export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) {
+export function AddProductDialog({
+  open,
+  onOpenChange,
+  purchaseMode,
+  onProductCreated,
+}: AddProductDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const createProduct = useCreateProduct();
@@ -389,14 +515,24 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
   useEffect(() => {
     if (open) {
       form.reset(defaultValues);
-      setTemplateKey(null);
-      setStepIndex(0);
+
+      const purchaseTemplate =
+        purchaseMode == null
+          ? null
+          : (CATEGORY_TEMPLATES.find(
+              (candidate) =>
+                candidate.label.toLowerCase() ===
+                purchaseMode.category.toLowerCase(),
+            ) ?? null);
+
+      setTemplateKey(purchaseTemplate?.key ?? null);
+      setStepIndex(purchaseTemplate ? 1 : 0);
       setImages([]);
       setColorVariants([]);
       setSizeQuantities([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, purchaseMode]);
 
   const buyingPrice = form.watch("buyingPrice");
   const price = form.watch("price");
@@ -404,14 +540,16 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
   const stillUploading = images.some((i) => i.uploading);
   const sizeTotal = sumSizeQuantities(sizeQuantities);
 
-  const stepFieldsFor = (
-    key: StepKey,
-  ): (keyof FormValues)[] => {
+  const stepFieldsFor = (key: StepKey): (keyof FormValues)[] => {
     if (key === "details") {
       return ["name"];
     }
 
     if (key === "inventory") {
+      if (purchaseMode) {
+        return ["price"];
+      }
+
       return template?.stockMode === "quantity"
         ? ["stock", "buyingPrice", "price"]
         : ["buyingPrice", "price"];
@@ -422,16 +560,50 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
 
   const goNext = async () => {
     if (currentStep === "category" && !template) return;
+
     const fields = stepFieldsFor(currentStep);
     const valid = fields.length === 0 || (await form.trigger(fields));
-    if (valid) setStepIndex((i) => Math.min(i + 1, steps.length - 1));
+
+    if (!valid) {
+      return;
+    }
+
+    if (
+      currentStep === "inventory" &&
+      purchaseMode &&
+      template?.stockMode === "sizes" &&
+      sizeTotal !== purchaseMode.quantity
+    ) {
+      toast({
+        title: "Complete the size allocation",
+        description:
+          sizeTotal < purchaseMode.quantity
+            ? `Assign the remaining ${purchaseMode.quantity - sizeTotal} ${
+                purchaseMode.quantity - sizeTotal === 1 ? "unit" : "units"
+              } to a size.`
+            : `Remove ${sizeTotal - purchaseMode.quantity} ${
+                sizeTotal - purchaseMode.quantity === 1 ? "unit" : "units"
+              } from the size allocation.`,
+        variant: "destructive",
+      });
+
+      return;
+    }
+
+    setStepIndex((i) => Math.min(i + 1, steps.length - 1));
   };
   const goBack = () => setStepIndex((i) => Math.max(i - 1, 0));
 
   const onSubmit = (values: FormValues) => {
     if (!template) return;
-    const uploadedUrls = images.filter((i) => i.uploadedUrl).map((i) => i.uploadedUrl!);
-    const finalStock = template.stockMode === "sizes" ? sizeTotal : (values.stock ?? 0);
+    const uploadedUrls = images
+      .filter((i) => i.uploadedUrl)
+      .map((i) => i.uploadedUrl!);
+    const finalStock = purchaseMode
+      ? 0
+      : template.stockMode === "sizes"
+        ? sizeTotal
+        : (values.stock ?? 0);
 
     /**
      * Category-specific product characteristics.
@@ -443,24 +615,14 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
     const attributes = Object.fromEntries(
       template.attributes
         .map((attribute) => {
-          const value =
-            values[
-              attribute.key as keyof FormValues
-            ];
+          const value = values[attribute.key as keyof FormValues];
 
-          return [
-            attribute.key,
-            value,
-          ] as const;
+          return [attribute.key, value] as const;
         })
         .filter((entry) => {
           const value = entry[1];
 
-          return (
-            value !== undefined &&
-            value !== null &&
-            value !== ""
-          );
+          return value !== undefined && value !== null && value !== "";
         }),
     ) as Record<string, string | number>;
 
@@ -469,20 +631,17 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
       category: template.label,
       brand: values.brand || undefined,
       description: values.description || undefined,
-      buyingPrice: values.buyingPrice,
+      buyingPrice: purchaseMode ? undefined : values.buyingPrice,
       price: values.price,
       stock: finalStock,
       lowStockThreshold: values.lowStockThreshold,
-      sku: template.hasSku ? (values.sku || undefined) : undefined,
-      barcode: template.hasBarcode ? (values.barcode || undefined) : undefined,
+      sku: template.hasSku ? values.sku || undefined : undefined,
+      barcode: template.hasBarcode ? values.barcode || undefined : undefined,
       imageUrl: uploadedUrls[0] || undefined,
       images: uploadedUrls.length > 0 ? uploadedUrls : undefined,
 
       // Flexible canonical category attributes.
-      attributes:
-        Object.keys(attributes).length > 0
-          ? attributes
-          : undefined,
+      attributes: Object.keys(attributes).length > 0 ? attributes : undefined,
 
       // Legacy columns retained temporarily for compatibility with
       // existing Product Details / filtering code.
@@ -491,23 +650,61 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
       style: values.style || undefined,
       closureType: values.closureType || undefined,
       compartments: values.compartments || undefined,
-      colorVariants: template.hasColorVariants && colorVariants.length > 0 ? colorVariants : undefined,
+      colorVariants:
+        template.hasColorVariants && colorVariants.length > 0
+          ? colorVariants
+          : undefined,
       pattern: values.pattern || undefined,
       sleeveType: values.sleeveType || undefined,
       fit: values.fit || undefined,
       season: values.season || undefined,
       shoeType: values.shoeType || undefined,
-      sizeQuantities: template.stockMode === "sizes" && sizeQuantities.length > 0 ? sizeQuantities : undefined,
+      sizeQuantities:
+        !purchaseMode &&
+        template.stockMode === "sizes" &&
+        sizeQuantities.length > 0
+          ? sizeQuantities
+          : undefined,
     };
 
-    createProduct.mutate({ data: payload }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
-        toast({ title: "Product added to your collection" });
-        onOpenChange(false);
+    createProduct.mutate(
+      { data: payload },
+      {
+        onSuccess: (product) => {
+          queryClient.invalidateQueries({
+            queryKey: getListProductsQueryKey(),
+          });
+
+          toast({
+            title: purchaseMode
+              ? "Product created"
+              : "Product added to your collection",
+            description: purchaseMode
+              ? "The purchased stock can now be added to this product."
+              : undefined,
+          });
+
+          onProductCreated?.(
+            product.id,
+            purchaseMode
+              ? {
+                  quantity:
+                    template.stockMode === "sizes"
+                      ? sizeTotal
+                      : purchaseMode.quantity,
+                  sizeQuantities:
+                    template.stockMode === "sizes" && sizeQuantities.length > 0
+                      ? sizeQuantities
+                      : undefined,
+                }
+              : undefined,
+          );
+          onOpenChange(false);
+        },
+        onError: () =>
+          toast({ title: "Failed to create product", variant: "destructive" }),
       },
-      onError: () => toast({ title: "Failed to create product", variant: "destructive" }),
-    });
+    );
   };
 
   return (
@@ -516,15 +713,18 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
         <DialogHeader>
           <DialogTitle>Add Product</DialogTitle>
           <DialogDescription>
-            {STEP_META[currentStep]}{template ? ` — ${template.label}` : ""}
+            {STEP_META[currentStep]}
+            {template ? ` — ${template.label}` : ""}
           </DialogDescription>
         </DialogHeader>
 
         <StepIndicator steps={steps} currentIndex={stepIndex} />
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-1">
-
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="space-y-4 pt-1"
+          >
             {/* ── Category ── */}
             {currentStep === "category" && (
               <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-right-2 duration-200">
@@ -541,7 +741,9 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
                     )}
                   >
                     <span className="text-3xl">{t.emoji}</span>
-                    <span className="text-sm font-semibold text-foreground text-center">{t.label}</span>
+                    <span className="text-sm font-semibold text-foreground text-center">
+                      {t.label}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -550,15 +752,11 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
             {/* ── Photos ── */}
             {currentStep === "images" && (
               <div className="animate-in fade-in slide-in-from-right-2 duration-200">
-                <ImageStep
-                  images={images}
-                  setImages={setImages}
-                />
+                <ImageStep images={images} setImages={setImages} />
 
                 <p className="mt-2 text-center text-xs text-muted-foreground">
-                  Add the product photo first so the
-                  details are easier to describe.
-                  You can add more photos later.
+                  Add the product photo first so the details are easier to
+                  describe. You can add more photos later.
                 </p>
               </div>
             )}
@@ -594,10 +792,7 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
                       <FormLabel>Product name</FormLabel>
 
                       <FormControl>
-                        <Input
-                          placeholder="e.g. Leather Tote Bag"
-                          {...field}
-                        />
+                        <Input placeholder="e.g. Leather Tote Bag" {...field} />
                       </FormControl>
 
                       <FormMessage />
@@ -618,10 +813,7 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
                       </FormLabel>
 
                       <FormControl>
-                        <Input
-                          placeholder="e.g. Michael Kors"
-                          {...field}
-                        />
+                        <Input placeholder="e.g. Michael Kors" {...field} />
                       </FormControl>
 
                       <FormMessage />
@@ -636,16 +828,13 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
                     name={attr.key as keyof FormValues}
                     render={({ field }) => {
                       const currentValue =
-                        field.value == null
-                          ? ""
-                          : String(field.value);
+                        field.value == null ? "" : String(field.value);
 
                       const isPresetValue =
                         attr.type === "select" &&
                         attr.options?.some(
                           (option) =>
-                            option !== "Other" &&
-                            option === currentValue,
+                            option !== "Other" && option === currentValue,
                         );
 
                       const isCustomValue =
@@ -664,72 +853,53 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
                             </span>
                           </FormLabel>
 
-                          {attr.type === "select" &&
-                          attr.options ? (
+                          {attr.type === "select" && attr.options ? (
                             <div className="space-y-2">
                               <div className="flex flex-wrap gap-2">
-                                {attr.options.map(
-                                  (option) => {
-                                    const isOther =
-                                      option === "Other";
+                                {attr.options.map((option) => {
+                                  const isOther = option === "Other";
 
-                                    const selected =
-                                      isOther
-                                        ? isCustomValue
-                                        : currentValue ===
-                                          option;
+                                  const selected = isOther
+                                    ? isCustomValue
+                                    : currentValue === option;
 
-                                    return (
-                                      <button
-                                        key={option}
-                                        type="button"
-                                        onClick={() => {
-                                          if (isOther) {
-                                            field.onChange(
-                                              isCustomValue
-                                                ? ""
-                                                : "Other",
-                                            );
-
-                                            return;
-                                          }
-
+                                  return (
+                                    <button
+                                      key={option}
+                                      type="button"
+                                      onClick={() => {
+                                        if (isOther) {
                                           field.onChange(
-                                            selected
-                                              ? ""
-                                              : option,
+                                            isCustomValue ? "" : "Other",
                                           );
-                                        }}
-                                        className={cn(
-                                          "min-h-9 rounded-full border px-3 py-2 text-xs font-medium transition-colors",
-                                          selected
-                                            ? "border-primary bg-primary/10 text-primary"
-                                            : "border-border bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-                                        )}
-                                      >
-                                        {option}
-                                      </button>
-                                    );
-                                  },
-                                )}
+
+                                          return;
+                                        }
+
+                                        field.onChange(selected ? "" : option);
+                                      }}
+                                      className={cn(
+                                        "min-h-9 rounded-full border px-3 py-2 text-xs font-medium transition-colors",
+                                        selected
+                                          ? "border-primary bg-primary/10 text-primary"
+                                          : "border-border bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                                      )}
+                                    >
+                                      {option}
+                                    </button>
+                                  );
+                                })}
                               </div>
 
                               {isCustomValue && (
                                 <Input
-                                  autoFocus={
-                                    currentValue ===
-                                    "Other"
-                                  }
+                                  autoFocus={currentValue === "Other"}
                                   value={
-                                    currentValue ===
-                                    "Other"
-                                      ? ""
-                                      : currentValue
+                                    currentValue === "Other" ? "" : currentValue
                                   }
                                   onChange={(event) =>
                                     field.onChange(
-                                      event.target.value ||
-                                        "Other",
+                                      event.target.value || "Other",
                                     )
                                   }
                                   placeholder={`Enter ${attr.label.toLowerCase()}`}
@@ -740,17 +910,11 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
                             <FormControl>
                               <Input
                                 type={
-                                  attr.type === "number"
-                                    ? "number"
-                                    : "text"
+                                  attr.type === "number" ? "number" : "text"
                                 }
-                                placeholder={
-                                  attr.placeholder
-                                }
+                                placeholder={attr.placeholder}
                                 {...field}
-                                value={
-                                  field.value ?? ""
-                                }
+                                value={field.value ?? ""}
                               />
                             </FormControl>
                           )}
@@ -794,53 +958,64 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
               <div className="space-y-5 animate-in fade-in slide-in-from-right-2 duration-200">
                 <section className="space-y-3">
                   <div>
-                    <h3 className="text-sm font-semibold">
-                      Pricing
-                    </h3>
+                    <h3 className="text-sm font-semibold">Pricing</h3>
 
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      Enter the cost and selling price
-                      for one item.
+                      {purchaseMode
+                        ? "Purchase cost is already recorded. Set the selling price for this product."
+                        : "Enter the cost and selling price for one item."}
                     </p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <FormField
-                      control={form.control}
-                      name="buyingPrice"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            Buying price
-                          </FormLabel>
+                    {purchaseMode ? (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium leading-none">
+                          Landed cost
+                        </label>
 
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              placeholder="0.00"
-                              {...field}
-                            />
-                          </FormControl>
+                        <div className="flex h-10 items-center rounded-md border border-input bg-muted/40 px-3 text-sm font-medium tabular-nums">
+                          {formatCurrency(purchaseMode.landedUnitCost)}
+                        </div>
 
-                          <p className="text-[10px] text-muted-foreground">
-                            Per item
-                          </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Per item · from this purchase
+                        </p>
+                      </div>
+                    ) : (
+                      <FormField
+                        control={form.control}
+                        name="buyingPrice"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Buying price</FormLabel>
 
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                placeholder="0.00"
+                                {...field}
+                              />
+                            </FormControl>
+
+                            <p className="text-[10px] text-muted-foreground">
+                              Per item
+                            </p>
+
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
 
                     <FormField
                       control={form.control}
                       name="price"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>
-                            Selling price
-                          </FormLabel>
+                          <FormLabel>Selling price</FormLabel>
 
                           <FormControl>
                             <Input
@@ -862,16 +1037,20 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
                     />
                   </div>
 
-                  {buyingPrice > 0 &&
-                    price > 0 && (
+                  {(purchaseMode
+                    ? purchaseMode.landedUnitCost > 0 && price > 0
+                    : buyingPrice > 0 && price > 0) && (
                     <div className="flex items-center justify-between rounded-xl bg-muted/50 px-3 py-2.5 text-xs">
                       <span className="text-muted-foreground">
-                        Profit per item
+                        Expected profit per item
                       </span>
 
                       <span className="font-semibold tabular-nums text-foreground">
                         {formatCurrency(
-                          price - buyingPrice,
+                          price -
+                            (purchaseMode
+                              ? purchaseMode.landedUnitCost
+                              : buyingPrice),
                         )}
                       </span>
                     </div>
@@ -891,8 +1070,7 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
                         </label>
 
                         <p className="mb-2 mt-1 text-xs text-muted-foreground">
-                          Other colors this item is
-                          available in.
+                          Other colors this item is available in.
                         </p>
 
                         <TagListInput
@@ -903,74 +1081,76 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
                       </div>
                     )}
 
-                    {template.stockMode === "sizes" &&
-                      template.sizeOptions && (
-                        <div>
-                          <label className="text-sm font-medium leading-none">
-                            Sizes & quantity
-                          </label>
+                    {template.stockMode === "sizes" && template.sizeOptions && (
+                      <div>
+                        <label className="text-sm font-medium leading-none">
+                          {purchaseMode
+                            ? "Size allocation"
+                            : "Sizes & quantity"}
+                        </label>
 
-                          <p className="mb-2 mt-1 text-xs text-muted-foreground">
-                            Enter how many of each size
-                            you have.
-                          </p>
+                        <p className="mb-2 mt-1 text-xs text-muted-foreground">
+                          {purchaseMode
+                            ? `Assign all ${purchaseMode.quantity} purchased ${
+                                purchaseMode.quantity === 1 ? "unit" : "units"
+                              } across sizes.`
+                            : "Enter how many of each size you have."}
+                        </p>
 
-                          <SizeQuantityTable
-                            sizeOptions={
-                              template.sizeOptions
-                            }
-                            value={sizeQuantities}
-                            onChange={
-                              setSizeQuantities
-                            }
-                          />
-                        </div>
-                      )}
+                        <SizeQuantityTable
+                          sizeOptions={template.sizeOptions}
+                          value={sizeQuantities}
+                          onChange={setSizeQuantities}
+                        />
+                      </div>
+                    )}
                   </section>
                 )}
 
                 <section className="space-y-3 border-t border-border pt-4">
                   <div className="grid grid-cols-2 gap-3">
-                    {template.stockMode ===
-                      "quantity" && (
-                      <FormField
-                        control={form.control}
-                        name="stock"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              Quantity
-                            </FormLabel>
+                    {template.stockMode === "quantity" &&
+                      (purchaseMode ? (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium leading-none">
+                            Quantity
+                          </label>
 
-                            <FormControl>
-                              <Input
-                                type="number"
-                                min={0}
-                                {...field}
-                              />
-                            </FormControl>
+                          <div className="flex h-10 items-center rounded-md border border-input bg-muted/40 px-3 text-sm font-medium tabular-nums">
+                            {purchaseMode.quantity}
+                          </div>
 
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
+                          <p className="text-[10px] text-muted-foreground">
+                            From this purchase
+                          </p>
+                        </div>
+                      ) : (
+                        <FormField
+                          control={form.control}
+                          name="stock"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Quantity</FormLabel>
+
+                              <FormControl>
+                                <Input type="number" min={0} {...field} />
+                              </FormControl>
+
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      ))}
 
                     <FormField
                       control={form.control}
                       name="lowStockThreshold"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>
-                            Low stock alert
-                          </FormLabel>
+                          <FormLabel>Low stock alert</FormLabel>
 
                           <FormControl>
-                            <Input
-                              type="number"
-                              min={0}
-                              {...field}
-                            />
+                            <Input type="number" min={0} {...field} />
                           </FormControl>
 
                           <FormMessage />
@@ -979,21 +1159,48 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
                     />
                   </div>
 
-                  {template.stockMode ===
-                    "sizes" && (
-                    <div className="rounded-xl bg-muted/40 px-3 py-2.5 text-xs">
-                      <span className="text-muted-foreground">
-                        Total quantity
-                      </span>
+                  {template.stockMode === "sizes" &&
+                    (purchaseMode ? (
+                      <div className="rounded-xl bg-muted/40 px-3 py-2.5 text-xs">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">
+                            Size allocation
+                          </span>
 
-                      <span className="ml-2 font-semibold tabular-nums">
-                        {sizeTotal} units
-                      </span>
-                    </div>
-                  )}
+                          <span className="font-semibold tabular-nums">
+                            {sizeTotal} of {purchaseMode.quantity} assigned
+                          </span>
+                        </div>
 
-                  {(template.hasSku ||
-                    template.hasBarcode) && (
+                        <p className="mt-1 text-[10px] text-muted-foreground">
+                          {sizeTotal === purchaseMode.quantity
+                            ? "Complete"
+                            : sizeTotal < purchaseMode.quantity
+                              ? `${purchaseMode.quantity - sizeTotal} ${
+                                  purchaseMode.quantity - sizeTotal === 1
+                                    ? "unit"
+                                    : "units"
+                                } remaining`
+                              : `${sizeTotal - purchaseMode.quantity} ${
+                                  sizeTotal - purchaseMode.quantity === 1
+                                    ? "unit"
+                                    : "units"
+                                } over the purchased quantity`}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl bg-muted/40 px-3 py-2.5 text-xs">
+                        <span className="text-muted-foreground">
+                          Total quantity
+                        </span>
+
+                        <span className="ml-2 font-semibold tabular-nums">
+                          {sizeTotal} units
+                        </span>
+                      </div>
+                    ))}
+
+                  {(template.hasSku || template.hasBarcode) && (
                     <div className="grid grid-cols-2 gap-3">
                       {template.hasSku && (
                         <FormField
@@ -1004,7 +1211,7 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
                               <FormLabel className="text-xs">
                                 SKU{" "}
                                 <span className="font-normal text-muted-foreground">
-                                (optional)
+                                  (optional)
                                 </span>
                               </FormLabel>
 
@@ -1035,10 +1242,7 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
                               </FormLabel>
 
                               <FormControl>
-                                <Input
-                                  placeholder="If it has one"
-                                  {...field}
-                                />
+                                <Input placeholder="If it has one" {...field} />
                               </FormControl>
 
                               <FormMessage />
@@ -1059,7 +1263,11 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
                   <div className="flex gap-3 p-3 border-b border-border">
                     <div className="w-16 h-16 rounded-lg bg-muted overflow-hidden shrink-0">
                       {images[0]?.previewUrl ? (
-                        <img src={images[0].previewUrl} alt="" className="w-full h-full object-cover" />
+                        <img
+                          src={images[0].previewUrl}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-muted-foreground/40">
                           <Package className="w-6 h-6" />
@@ -1067,44 +1275,71 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-foreground truncate">{form.getValues("name") || "Untitled product"}</p>
+                      <p className="font-semibold text-foreground truncate">
+                        {form.getValues("name") || "Untitled product"}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {template.emoji} {template.label}
-                        {form.getValues("brand") ? ` · ${form.getValues("brand")}` : ""}
+                        {form.getValues("brand")
+                          ? ` · ${form.getValues("brand")}`
+                          : ""}
                       </p>
-                      <p className="text-sm font-bold text-primary mt-1">{formatCurrency(price ?? 0)}</p>
+                      <p className="text-sm font-bold text-primary mt-1">
+                        {formatCurrency(price ?? 0)}
+                      </p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 divide-x divide-border text-sm">
                     <div className="p-3 space-y-1">
                       <p className="text-[11px] text-muted-foreground">Stock</p>
                       <p className="font-medium">
-                        {template.stockMode === "sizes" ? sizeTotal : (flatStock ?? 0)} units
+                        {template.stockMode === "sizes"
+                          ? sizeTotal
+                          : (flatStock ?? 0)}{" "}
+                        units
                       </p>
                     </div>
                     <div className="p-3 space-y-1">
-                      <p className="text-[11px] text-muted-foreground">Low stock alert</p>
-                      <p className="font-medium">{form.getValues("lowStockThreshold") ?? 5} units</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Low stock alert
+                      </p>
+                      <p className="font-medium">
+                        {form.getValues("lowStockThreshold") ?? 5} units
+                      </p>
                     </div>
                   </div>
                   <div className="p-3 border-t border-border text-sm space-y-1">
                     {template.attributes.map((attr) => {
                       const val = form.getValues(attr.key as keyof FormValues);
                       if (!val) return null;
-                      return <p key={attr.key}><span className="text-muted-foreground">{attr.label}:</span> {String(val)}</p>;
+                      return (
+                        <p key={attr.key}>
+                          <span className="text-muted-foreground">
+                            {attr.label}:
+                          </span>{" "}
+                          {String(val)}
+                        </p>
+                      );
                     })}
                     {colorVariants.length > 0 && (
-                      <p><span className="text-muted-foreground">Color variants:</span> {colorVariants.join(", ")}</p>
+                      <p>
+                        <span className="text-muted-foreground">
+                          Color variants:
+                        </span>{" "}
+                        {colorVariants.join(", ")}
+                      </p>
                     )}
                   </div>
                   {images.length > 1 && (
                     <div className="p-3 border-t border-border text-xs text-muted-foreground">
-                      + {images.length - 1} more photo{images.length - 1 !== 1 ? "s" : ""}
+                      + {images.length - 1} more photo
+                      {images.length - 1 !== 1 ? "s" : ""}
                     </div>
                   )}
                 </div>
                 <p className="text-xs text-center text-muted-foreground">
-                  Check everything looks right, then tap Save to add it to your inventory.
+                  Check everything looks right, then tap Save to add it to your
+                  inventory.
                 </p>
               </div>
             )}
@@ -1119,18 +1354,31 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
                 )}
               </div>
               <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Cancel
+                </Button>
                 {stepIndex < steps.length - 1 ? (
                   <Button
                     type="button"
                     onClick={goNext}
-                    disabled={(currentStep === "category" && !template) || (currentStep === "images" && stillUploading)}
+                    disabled={
+                      (currentStep === "category" && !template) ||
+                      (currentStep === "images" && stillUploading)
+                    }
                   >
                     Next <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                 ) : (
                   <Button type="submit" disabled={createProduct.isPending}>
-                    {createProduct.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+                    {createProduct.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Check className="w-4 h-4 mr-2" />
+                    )}
                     Save Product
                   </Button>
                 )}
