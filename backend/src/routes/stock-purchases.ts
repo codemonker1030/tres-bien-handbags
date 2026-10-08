@@ -676,7 +676,24 @@ router.post(
           ? product.sizeQuantities
           : [];
 
-        const isSizeBasedProduct = existingSizeQuantities.length > 0;
+        /**
+         * A newly created purchase-linked size product starts with stock = 0
+         * and may not have a persisted size breakdown yet. Do not use the
+         * presence of existing size quantities as the only signal that the
+         * product is size-based.
+         *
+         * Existing size quantities remain authoritative for products that
+         * already have stock. Category recognition allows the first purchase
+         * allocation to initialize the size breakdown.
+         */
+        const normalizedCategory = product.category.trim().toLowerCase();
+
+        const isSizeCategory =
+          normalizedCategory === "shoes" ||
+          normalizedCategory === "dresses / clothing";
+
+        const isSizeBasedProduct =
+          existingSizeQuantities.length > 0 || isSizeCategory;
 
         if (
           isSizeBasedProduct &&
@@ -697,22 +714,37 @@ router.post(
           );
         }
 
-        const mergedSizeQuantities = isSizeBasedProduct
-          ? existingSizeQuantities.map((existing) => {
-              const incoming = requestedSizeQuantities?.find(
-                (entry) =>
-                  entry.size.trim().toLowerCase() ===
-                  existing.size.trim().toLowerCase(),
-              );
+        const isInitialSizeAllocation =
+          isSizeBasedProduct && existingSizeQuantities.length === 0;
 
-              return {
-                size: existing.size,
-                quantity: existing.quantity + (incoming?.quantity ?? 0),
-              };
-            })
+        const mergedSizeQuantities = isSizeBasedProduct
+          ? isInitialSizeAllocation
+            ? requestedSizeQuantities?.map((entry) => ({
+                size: entry.size,
+                quantity: entry.quantity,
+              }))
+            : existingSizeQuantities.map((existing) => {
+                const incoming = requestedSizeQuantities?.find(
+                  (entry) =>
+                    entry.size.trim().toLowerCase() ===
+                    existing.size.trim().toLowerCase(),
+                );
+
+                return {
+                  size: existing.size,
+                  quantity: existing.quantity + (incoming?.quantity ?? 0),
+                };
+              })
           : undefined;
 
+        /**
+         * Once a product has an established size breakdown, allocations may
+         * only add stock to those configured sizes. The first allocation for
+         * a newly created purchase-linked size product initializes that
+         * breakdown instead.
+         */
         if (
+          !isInitialSizeAllocation &&
           requestedSizeQuantities?.some(
             (incoming) =>
               !existingSizeQuantities.some(
