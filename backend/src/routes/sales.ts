@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, gte, sql } from "drizzle-orm";
 import {
   db,
   salesTable,
@@ -174,119 +174,133 @@ router.get(
   },
 );
 
-router.post(
-  "/products/:id/sales",
-  async (req, res): Promise<void> => {
-    const params =
-      CreateSaleParams.safeParse(req.params);
+router.post("/products/:id/sales", async (req, res): Promise<void> => {
+  const params = CreateSaleParams.safeParse(req.params);
 
-    if (!params.success) {
-      res
-        .status(400)
-        .json({ error: params.error.message });
-      return;
-    }
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
 
-    const parsed =
-      CreateSaleBody.safeParse(req.body);
+  const parsed = CreateSaleBody.safeParse(req.body);
 
-    if (!parsed.success) {
-      res
-        .status(400)
-        .json({ error: parsed.error.message });
-      return;
-    }
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
 
-    const hasDebt =
-      (parsed.data.debtAmount ?? 0) > 0;
+  const data = parsed.data;
+  const customerName = data.customerName?.trim();
+  const debtAmount = data.debtAmount ?? 0;
 
-    const customerName =
-      parsed.data.customerName?.trim();
+  // Work in cents to avoid floating-point comparison errors.
+  const saleTotalCents =
+    Math.round(data.exactSellingPrice * 100) * data.quantity;
+  const debtCents = Math.round(debtAmount * 100);
 
-    if (hasDebt && !customerName) {
-      res.status(400).json({
-        error:
-          "customerName is required for partial or credit sales",
-      });
-      return;
-    }
+  if (
+    !Number.isSafeInteger(saleTotalCents) ||
+    !Number.isSafeInteger(debtCents) ||
+    debtCents > saleTotalCents
+  ) {
+    res.status(400).json({
+      error: "Customer debt cannot exceed the total sale amount",
+    });
+    return;
+  }
 
-    const [product] = await db
-      .select()
-      .from(productsTable)
-      .where(
-        eq(productsTable.id, params.data.id),
-      );
+  if (debtCents > 0 && !customerName) {
+    res.status(400).json({
+      error: "customerName is required for partial or credit sales",
+    });
+    return;
+  }
 
-    if (!product) {
-      res
-        .status(404)
-        .json({ error: "Product not found" });
-      return;
-    }
+  try {
+    const sale = await db.transaction(async (tx) => {
+      // Conditional update prevents concurrent sales from overselling.
+      const [updatedProduct] = await tx
+        .update(productsTable)
+        .set({
+          stock: sql`${productsTable.stock} - ${data.quantity}`,
+        })
+        .where(
+          and(
+            eq(productsTable.id, params.data.id),
+            gte(productsTable.stock, data.quantity),
+          ),
+        )
+        .returning();
 
-    // Create the debt first (if any) so the sale can be linked to it from the start.
-    let debtId: number | undefined;
+      if (!updatedProduct) {
+        const [product] = await tx
+          .select({ stock: productsTable.stock })
+          .from(productsTable)
+          .where(eq(productsTable.id, params.data.id));
 
-    if (hasDebt && customerName) {
-      debtId = await createDebtForSale({
-        productName: product.name,
-        customerName,
-        debtAmount: parsed.data.debtAmount!,
-        notes: parsed.data.notes,
-      });
-    }
+        if (!product) {
+          throw new Error("Product not found");
+        }
 
-    const {
-      exactSellingPrice,
-      debtAmount,
-      customerName: _customerName,
-      ...saleData
-    } = parsed.data;
+        throw new Error(
+          `Only ${product.stock} unit${product.stock === 1 ? "" : "s"} available in stock`,
+        );
+      }
 
-    const [sale] = await db
-      .insert(salesTable)
-      .values({
-        ...saleData,
-        exactSellingPrice:
-          exactSellingPrice.toFixed(2),
-        debtAmount:
-          debtAmount !== undefined
-            ? debtAmount.toFixed(2)
-            : undefined,
-        customerName:
-          customerName ?? undefined,
-        productId: params.data.id,
-        debtId,
-      })
-      .returning();
+      let debtId: number | undefined;
 
-    const quantity = parsed.data.quantity;
+      if (debtCents > 0 && customerName) {
+        const [debt] = await tx
+          .insert(customerDebtsTable)
+          .values({
+            customerName,
+            description: `Credit sale — ${updatedProduct.name}`,
+            amount: (debtCents / 100).toFixed(2),
+            amountPaid: "0",
+            notes: data.notes ?? undefined,
+          })
+          .returning();
 
-    if (product.stock < quantity) {
-      res.status(400).json({
-        error: `Only ${product.stock} unit${product.stock === 1 ? "" : "s"} available in stock`,
-      });
-      return;
-    }
+        if (!debt) {
+          throw new Error("Failed to create customer debt");
+        }
 
-    await db
-      .update(productsTable)
-      .set({
-        stock: product.stock - quantity,
-      })
-      .where(
-        eq(productsTable.id, params.data.id),
-      );
+        debtId = debt.id;
+      }
 
-    res.status(201).json(
-      ListProductSalesResponseItem.parse(
-        mapSale(sale),
-      ),
-    );
-  },
-);
+      const [createdSale] = await tx
+        .insert(salesTable)
+        .values({
+          productId: params.data.id,
+          exactSellingPrice: data.exactSellingPrice.toFixed(2),
+          quantity: data.quantity,
+          paymentMethod: data.paymentMethod,
+          debtAmount: debtCents > 0 ? (debtCents / 100).toFixed(2) : null,
+          customerName: debtCents > 0 ? customerName : null,
+          notes: data.notes ?? null,
+          debtId,
+        })
+        .returning();
 
+      if (!createdSale) {
+        throw new Error("Failed to create sale");
+      }
+
+      return createdSale;
+    });
+
+    res.status(201).json(ListProductSalesResponseItem.parse(mapSale(sale)));
+  } catch (error) {
+    console.error("SALE CREATION FAILED:", error);
+
+    const message =
+      error instanceof Error && error.message
+        ? error.message
+        : "Failed to create sale";
+
+    res.status(400).json({ error: message });
+  }
+});
 
 router.patch(
   "/sales/:id",
